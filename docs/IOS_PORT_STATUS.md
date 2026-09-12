@@ -16,16 +16,31 @@ Verified by CI run [34703439905](https://github.com/mulareal/zephyru-ios/actions
 ("BUILD SUCCEEDED", link line shows every static library and framework, output
 `build-ios/ios/Release-iphoneos/ZephyrU.app/ZephyrU`, target `arm64-apple-ios26.0`).
 
-Runtime milestones (M0 launch on hardware onward) still need a physical iPhone 17 Pro and are
-tracked below.
+**M0 and M1 are verified on hardware** (2026-09-12): the CI artifact of run
+[34714878411](https://github.com/mulareal/zephyru-ios/actions/runs/34714878411) was re-signed with
+the development team profile for `com.zephyru.emulator` and installed on the paired iPhone 17 Pro
+(`iPhone18,1`, iOS 27.0 `24A5430a`) via `devicectl`. The app launches to the game list, the
+Environment row reports `AArch64 recompiler: unavailable` (no debugger attached, interpreter mode),
+backgrounding and re-foregrounding keeps the same process alive, and the core initialized:
+
+```
+[21:47:55.639] ------- Init Cemu 3310f3b -------
+[21:47:55.639] mlc01 path: .../Library/Application Support/mlc01
+[21:47:55.672] ZephyrU: core initialized (JIT: no)
+[21:47:55.672] ZephyrU: data path .../ZephyrU.app/SharedSupport
+[21:47:55.672] ZephyrU: mlc path .../Library/Application Support/mlc01
+```
+
+M2 (title metadata) onward still need a user-imported title; the scan path `Documents/games` and
+`CafeTitleList` are initialized. See `docs/IOS_DEVICE_BRINGUP.md` for the signing/install loop.
 
 ## Milestones
 
 | ID | Goal | Status | Evidence / Blockers |
 |---|---|---|---|
-| M0 | iOS application launches | BUILD DONE / RUN PENDING | `ZephyrU.app` links in CI; launch needs device signing with `get-task-allow` |
-| M1 | Cemu core initializes | SCAFFOLDED | `CemuIOSBridge::initializeCoreWithError` ports `CemuCommonInit`/`CemuApp::OnInit` path setup, MLC creation, audio/input/graphic-pack init |
-| M2 | Game metadata readable | SCAFFOLDED | `CafeTitleList` initialized with Documents/games scan path; `.rpx` standalone path supported directly |
+| M0 | iOS application launches | **DONE** (device) | CI artifact run 34714878411 re-signed + installed on iPhone 17 Pro (iOS 27.0); UI, JIT-status row, background/foreground verified; process survives Settings foregrounding; see bring-up log below |
+| M1 | Cemu core initializes | **DONE** (device) | `log.txt`: `ZephyrU: core initialized (JIT: no)`; `mlc01` (sys/usr titles, save dirs, `language.txt`, `country.txt`, `PlayDiary.dat`), `settings.xml`, `controllerProfiles`, `memorySearcher`, `Documents/games` all created |
+| M2 | Game metadata readable | SCAFFOLDED | `CafeTitleList` initialized with Documents/games scan path; `.rpx` standalone path supported directly; needs a user-imported title to verify |
 | M3 | Wind Waker HD executable loads | TODO | `PrepareForegroundTitle`/`â€¦FromStandaloneRPX` wired; needs device run |
 | M4 | First PowerPC code executes | TODO | depends on M3; fiber scheduler now has a working iOS backend (libucontext) |
 | M5 | First GX2 commands execute | TODO | Metal renderer + iOS CAMetalLayer surface compiled |
@@ -55,8 +70,8 @@ tracked below.
 | Input `GameControllerProvider` | DONE (build) | none | controller test on device |
 | Default controller mapping for `IOSController` | DONE (build) | none | verify button mapping on device |
 | File import (`UIDocumentPicker` â†’ Documents/games) | DONE (build) | none | device test |
-| Save data path (MLC in Application Support) | SCAFFOLDED | crash-consistency hardening | add flush-on-background |
-| JIT capability probe + UI status | DONE (build) | none | device test |
+| Save data path (MLC in Application Support) | DONE (device) | crash-consistency hardening | add flush-on-background |
+| JIT capability probe + UI status | DONE (device) | device reports `AArch64 recompiler: unavailable` without debugger, as designed | validate JIT path with debugger attach (StikDebug-class) |
 | MetalFX frame interpolation / upscaling | TODO | needs JIT for full-speed rendering, motion-vector synthesis design | research Â§5 |
 | Performance overlay (EMU/DISPLAY/GENERATED FPS, speed %) | SCAFFOLDED | only frame counters for now | extend bridge telemetry with per-stage timings |
 | Thermal management | TODO | device access | `ProcessInfo.thermalState` scaling policy |
@@ -107,6 +122,38 @@ All runs use GitHub Actions `macos-26` (Xcode 26.6, iPhoneOS 26.5 SDK), target `
 | 34702849057 | FAILED link | `Fiber.h` include path; missing `makecontext.c`; missing `CemuResource` â†’ fixed |
 | **34703439905** | **SUCCESS** | **`ZephyrU.app` built and linked for `arm64-apple-ios26.0`** |
 | 34704088499 | SUCCESS | binary verified: `Mach-O 64-bit executable arm64`, `minos 26.0`; artifacts `ZephyrU-app-22`, `ios-build-logs-22` |
+| 34706976321 | SUCCESS | AGENTS.md handoff; first device install (crashed at dyld init, see traps) |
+| 34708990932 | SUCCESS | AArch64 interface CodeGenerators constructed lazily; app survives dyld init |
+| 34712079129 | SUCCESS | path diagnostics; found `controllerProfiles` created relative (LTO symbol duplication) |
+| 34713931394 | SUCCESS | LTO disabled on iOS; `nm` shows single `ActiveSettings::s_config_path` / `GetConfigHandle()::config` |
+| 34714878411 | SUCCESS | `cemuLog_createLogFile` in core init; M0+M1 verified on device (`core initialized (JIT: no)`) |
+
+## Device bring-up log (iPhone 17 Pro, iOS 27.0 `24A5430a`)
+
+Installation uses the workflow in `docs/IOS_DEVICE_BRINGUP.md`: download the CI app artifact,
+re-sign with the development profile (`get-task-allow`), `devicectl device install`, launch with
+`--console`, pull `Library/Application Support/log.txt`.
+
+Three issues were found and fixed on the way to M1:
+
+1. **SIGABRT before `main` (dyld static initializers).** The AArch64 backend had three global
+   `AArch64GenContext_t` objects whose constructors allocate executable memory through xbyak.
+   Without JIT that allocation throws during dyld init, before `main` can select the interpreter.
+   Fixed by constructing them lazily inside
+   `PPCRecompilerAArch64Gen_generateRecompilerInterfaceFunctions()`.
+2. **Duplicate vague-linkage symbols under LTO.** ThinLTO internalized inline variables and
+   function-local statics per static library, so the binary contained two copies of
+   `ActiveSettings::s_config_path` and `GetConfigHandle()::config`; the bridge wrote one copy while
+   the core read the other, making `GetConfigPath()` return relative paths (`controllerProfiles`)
+   and directory creation fail with `Operation not permitted`. Fixed by disabling
+   `CMAKE_INTERPROCEDURAL_OPTIMIZATION_*` when `CEMU_IOS=ON`; verified with `nm` on the artifact.
+3. **Free developer profile constraints.** A free Apple ID team allows at most three
+   development-signed apps per device and profiles expire after 7 days. Keep one slot free or
+   uninstall an app before installing, and re-run automatic signing to refresh the profile.
+
+For debug builds, `devicectl` already forwards the app's `stderr` when launched with `--console`;
+`NSLog` output appears there. `cemuLog` output is written to `log.txt` in the app's Application
+Support directory.
 
 Pre-emptive iOS fixes applied while builds ran (verified against Darwin APIs):
 `GetTickCount`, `HighResolutionTimer`, `pthread_setname_np`, `cpu_features`, `MMU.h` endian macros,
