@@ -674,10 +674,10 @@ index a791c5f..9ae51bf 100644
  	case InputAPI::SDLController: {
  		const auto sdl_controller = std::static_pointer_cast<SDLController>(controller);
 diff --git a/src/util/CMakeLists.txt b/src/util/CMakeLists.txt
-index be10d40..99de8e3 100644
+index be10d40..e8f9551 100644
 --- a/src/util/CMakeLists.txt
 +++ b/src/util/CMakeLists.txt
-@@ -75,7 +75,29 @@ if(WIN32)
+@@ -75,7 +75,31 @@ if(WIN32)
  	target_sources(CemuUtil PRIVATE MemMapper/MemMapperWin.cpp)
  	target_sources(CemuUtil PRIVATE SystemInfo/SystemInfoWin.cpp)
  elseif(UNIX)
@@ -689,6 +689,7 @@ index be10d40..99de8e3 100644
 +			${CMAKE_SOURCE_DIR}/ios/third_party/libucontext/arch/aarch64/getcontext.S
 +			${CMAKE_SOURCE_DIR}/ios/third_party/libucontext/arch/aarch64/setcontext.S
 +			${CMAKE_SOURCE_DIR}/ios/third_party/libucontext/arch/aarch64/swapcontext.S
++			${CMAKE_SOURCE_DIR}/ios/third_party/libucontext/arch/aarch64/makecontext.c
 +			${CMAKE_SOURCE_DIR}/ios/third_party/libucontext/arch/aarch64/trampoline.c
 +		)
 +		target_include_directories(CemuUtil PRIVATE
@@ -697,9 +698,10 @@ index be10d40..99de8e3 100644
 +			"${CMAKE_SOURCE_DIR}/ios/third_party/libucontext/arch/aarch64"
 +			"${CMAKE_SOURCE_DIR}/ios/third_party/libucontext/arch/common"
 +		)
-+		# libucontext's trampoline is C; the C++ precompiled header cannot apply
++		# libucontext's C sources cannot use the C++ precompiled header
 +		set_source_files_properties(
 +			${CMAKE_SOURCE_DIR}/ios/third_party/libucontext/arch/aarch64/trampoline.c
++			${CMAKE_SOURCE_DIR}/ios/third_party/libucontext/arch/aarch64/makecontext.c
 +			PROPERTIES SKIP_PRECOMPILE_HEADERS ON
 +		)
 +	else()

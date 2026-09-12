@@ -109,6 +109,7 @@ target_link_libraries(ZephyrU PRIVATE
 	CemuAudio
 	CemuGui
 	CemuUtil
+	CemuResource
 	imguiImpl
 	"-framework UniformTypeIdentifiers"
 )
