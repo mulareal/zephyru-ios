@@ -122,6 +122,7 @@ jobs:
       # consecutive iterations do not rebuild all iOS dependencies.
       - name: Save vcpkg binary cache
         if: always()
+        continue-on-error: true
         uses: actions/cache/save@v4
         with:
           path: ${{ github.workspace }}/vcpkg-bincache
