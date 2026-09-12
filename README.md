@@ -48,6 +48,15 @@ The CI workflow performs exactly these steps and uploads logs for every run.
 - **Input**: `GameControllerProvider` on Apple's GameController framework, plus the same default
   mapping as the desktop SDL provider.
 
+## Project tracking
+
+Work is tracked as GitHub issues/milestones:
+https://github.com/mulareal/zephyru-ios/issues
+
+`scripts/setup_github_project.sh` (re)creates labels, phase milestones and the issue
+backlog, and links a Projects v2 board when the token has the `project` scope
+(`gh auth refresh -s project,read:project`).
+
 ## Legal
 
 ZephyrU contains no game code, keys, or copyrighted data. It only runs titles the user has
