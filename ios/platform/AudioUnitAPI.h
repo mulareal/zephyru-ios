@@ -50,7 +50,7 @@ private:
 
 	void FillOutput(void* outputBuffer, size_t byteCount);
 
-	AudioUnit m_audioUnit = nullptr;
+	::AudioUnit m_audioUnit = nullptr;
 	bool m_isPlaying = false;
 
 	mutable std::mutex m_mutex;

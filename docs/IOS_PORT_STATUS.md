@@ -70,7 +70,28 @@ Legend: **DONE** implemented, **SCAFFOLDED** code written but not yet compiled o
 
 ## Build evidence log
 
-| Run | Commit | Target | Result |
+All runs use GitHub Actions `macos-26` (Xcode 26.6, iPhoneOS 26.5 SDK), target `ZephyrU`,
+`CMAKE_SYSTEM_NAME=iOS`, `CMAKE_OSX_ARCHITECTURES=arm64`.
+
+| Run | Target | Result | First error / action taken |
 |---|---|---|---|
-| 34695711138 | 27414fe | CemuCommon | FAILED (configure): vcpkg shallow clone missing pinned baseline commit `f0fb3dd`; workflow fixed |
-| (pending) | | CemuCommon | re-run after vcpkg fetch fix + `Common/unix/platform.cpp` and `cpu_features.cpp` iOS guards |
+| 34695711138 | configure | FAILED | vcpkg shallow clone missing pinned baseline → full clone |
+| 34695778566 | configure | FAILED | vcpkg versioned ports need full history → full clone |
+| 34695830761 | configure | FAILED | ZArchive `install()` needs BUNDLE DESTINATION on iOS → default non-bundle |
+| 34696332844 | configure | FAILED | relative `../ios/...` source paths → absolute `${CMAKE_SOURCE_DIR}` |
+| 34696844197 | build | FAILED | `ios/platform/GameControllerProvider.h` not found from core TUs → global include dir |
+| 34697067486 | build | FAILED | `weakSelf` scope, `uint32` in app sources → fixed |
+| 34697250883 | build | FAILED | ObjC++ code in `.cpp` files → renamed to `.mm`, ARC per-file |
+| 34697619913 | build | FAILED | `mach_vm.h` unsupported on iOS → `vm_region_64` probe |
+| 34697963195 | build | FAILED | `std::string` → `const char*` in error shim |
+| 34698337905 | build | FAILED | `CrashDump` enum guarded by `BOOST_OS_UNIX` (not set on iOS) → include CEMU_IOS |
+| 34698718640 | build | FAILED | `system()` unavailable on iOS (macOS debug helper) → guarded |
+| 34699141707 | build | FAILED | `robin_hood` pulled in transitively via Vulkan on desktop → direct include |
+| 34699610712 | build | FAILED | `VulkanRendererConst` alias used unguarded in LatteBufferData → `LatteConst::ShaderType` |
+| (latest) | build | in progress | continuing to resolve the desktop-assumption tail in `CemuCafe` |
+
+Pre-emptive iOS fixes applied while builds ran (verified against Darwin APIs):
+`GetTickCount`, `HighResolutionTimer`, `pthread_setname_np`, `cpu_features`, `MMU.h` endian macros,
+`Common/platform.h`, `precompiled.h` swap/steady-clock, `LatteAddrLib_Coord`, `coreinit_MCP`,
+`DSUControllerProvider`, `CafeSystem` RAM/OS-version reporting.
+
