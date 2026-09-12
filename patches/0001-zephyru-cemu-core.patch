@@ -1,8 +1,8 @@
 diff --git a/CMakeLists.txt b/CMakeLists.txt
-index 644032c..783611b 100644
+index 644032c..43bceac 100644
 --- a/CMakeLists.txt
 +++ b/CMakeLists.txt
-@@ -4,6 +4,26 @@ option(ENABLE_VCPKG "Enable the vcpkg package manager" ON)
+@@ -4,6 +4,28 @@ option(ENABLE_VCPKG "Enable the vcpkg package manager" ON)
  option(MACOS_BUNDLE "The executable when built on macOS will be created as an application bundle" OFF)
  option(ALLOW_PORTABLE "Allow Cemu to be run in portable mode" ON)
  
@@ -11,6 +11,8 @@ index 644032c..783611b 100644
 +
 +if (CEMU_IOS)
 +	add_compile_definitions(CEMU_IOS=1)
++	# core headers reference the iOS platform overlay as "ios/platform/..."
++	include_directories(${CMAKE_CURRENT_SOURCE_DIR})
 +	# desktop-only components are never used on iOS
 +	set(ENABLE_WXWIDGETS OFF CACHE BOOL "" FORCE)
 +	set(ENABLE_OPENGL OFF CACHE BOOL "" FORCE)
@@ -29,7 +31,7 @@ index 644032c..783611b 100644
  # used by CI script to set version:
  set(EMULATOR_VERSION_MAJOR "0" CACHE STRING "")
  set(EMULATOR_VERSION_MINOR "0" CACHE STRING "")
-@@ -99,7 +119,12 @@ endif()
+@@ -99,7 +121,12 @@ endif()
  
  if (APPLE)
      enable_language(OBJC OBJCXX)
@@ -43,7 +45,7 @@ index 644032c..783611b 100644
  endif()
  
  if (UNIX AND NOT APPLE)
-@@ -269,3 +294,7 @@ if (NOT ZArchive_FOUND)
+@@ -269,3 +296,7 @@ if (NOT ZArchive_FOUND)
  endif()
  
  add_subdirectory(src)

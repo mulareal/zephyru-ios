@@ -1,4 +1,6 @@
-// ZephyrU — iOS embedding bridge implementation.
+#include "Common/precompiled.h"
+
+// ZephyrU â€” iOS embedding bridge implementation.
 
 #import "CemuIOSBridge.h"
 

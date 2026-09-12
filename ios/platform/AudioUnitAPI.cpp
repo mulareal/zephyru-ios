@@ -1,3 +1,5 @@
+#include "Common/precompiled.h"
+
 // ZephyrU iOS platform layer
 // AudioUnit (RemoteIO) backend for Cemu's IAudioAPI.
 

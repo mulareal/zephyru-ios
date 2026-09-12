@@ -1,3 +1,5 @@
+#include "Common/precompiled.h"
+
 // ZephyrU iOS platform layer
 // Implements the WindowSystem interface from src/gui/interface/WindowSystem.h
 // This replaces the wxWidgets implementation (src/gui/wxgui/wxWindowSystem.cpp)
