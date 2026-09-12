@@ -218,13 +218,14 @@ namespace
 
 		// User-supplied decryption keys (never bundled). Documents/keys.txt is the
 		// Files-app accessible location; Cemu's KeyCache reads the user data path copy.
+		// A present Documents/keys.txt always wins so users can replace keys at any time.
 		{
 			std::error_code keyEc;
 			const fs::path userKeys = documentsPath / "keys.txt";
 			const fs::path cemuKeys = supportPath / "keys.txt";
-			if (fs::exists(userKeys, keyEc) && !fs::exists(cemuKeys, keyEc))
+			if (fs::exists(userKeys, keyEc))
 			{
-				fs::copy_file(userKeys, cemuKeys, keyEc);
+				fs::copy_file(userKeys, cemuKeys, fs::copy_options::overwrite_existing, keyEc);
 				NSLog(@"[ZephyrU] imported keys.txt from Documents");
 			}
 		}

@@ -176,7 +176,10 @@ Support directory.
   probe now writes an AArch64 `ret` stub and executes it under a signal guard. The recompiler is
   only selected when execution actually works.
 - LLDB attach works with `devicectl device process launch --start-stopped` followed by
-  `device process attach -p <pid> -c` in `xcrun lldb` (Xcode 26.5).
+  `device process attach -p <pid> -c` in `xcrun lldb` (Xcode 26.5). However, attaching this way
+  does **not** grant usable executable memory on iOS 27.0/TXM: the probe still reports
+  `JIT: no` with the debugger attached and running. Enabling the recompiler needs a
+  StikDebug-class mechanism (or different TXM research), see issue #18.
 
 Pre-emptive iOS fixes applied while builds ran (verified against Darwin APIs):
 `GetTickCount`, `HighResolutionTimer`, `pthread_setname_np`, `cpu_features`, `MMU.h` endian macros,
