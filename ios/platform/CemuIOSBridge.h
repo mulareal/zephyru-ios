@@ -42,6 +42,9 @@ extern NSNotificationName const ZephyrUGameExitedNotification;
 /// Current frame counters and title info. Safe to call from the main thread.
 - (NSDictionary<NSString*, id>*)telemetry;
 
+/// Writes one telemetry line to Cemu's log.txt (used by unattended test runs).
+- (void)logTelemetry;
+
 @end
 
 NS_ASSUME_NONNULL_END
