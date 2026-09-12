@@ -150,6 +150,31 @@ index 26da5ec..e3c6a56 100644
  	unsigned char _BitScanReverse(uint32* _Index, uint32 _Mask)
  	{
  		if (!_Mask)
+diff --git a/src/Cafe/HW/Latte/Renderer/Metal/MetalCommon.h b/src/Cafe/HW/Latte/Renderer/Metal/MetalCommon.h
+index 1239f08..dde7806 100644
+--- a/src/Cafe/HW/Latte/Renderer/Metal/MetalCommon.h
++++ b/src/Cafe/HW/Latte/Renderer/Metal/MetalCommon.h
+@@ -107,6 +107,12 @@ inline bool FormatIsRenderable(Latte::E_GX2SURFFMT format)
+ template <typename... T>
+ inline bool executeCommand(fmt::format_string<T...> fmt, T&&... args) {
+     std::string command = fmt::format(fmt, std::forward<T>(args)...);
++#if defined(CEMU_IOS)
++    // The shell is unavailable to sandboxed iOS apps. These commands are only
++    // used by macOS shader dump/debug tooling, which is not available on iOS.
++    cemuLog_log(LogType::Force, "executeCommand is not supported on iOS: {}", command);
++    return false;
++#else
+     int res = system(command.c_str());
+     if (res != 0)
+     {
+@@ -115,6 +121,7 @@ inline bool executeCommand(fmt::format_string<T...> fmt, T&&... args) {
+     }
+ 
+     return true;
++#endif
+ }
+ 
+ /*
 diff --git a/src/Cafe/HW/MMU/MMU.h b/src/Cafe/HW/MMU/MMU.h
 index 6e3bee7..673f898 100644
 --- a/src/Cafe/HW/MMU/MMU.h
