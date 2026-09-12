@@ -95,6 +95,29 @@ jobs:
           if-no-files-found: ignore
           retention-days: 14
 
+      - name: Inspect app binary
+        if: success() && env.BUILD_TARGET == 'ZephyrU'
+        run: |
+          APP=build-ios/ios/Release-iphoneos/ZephyrU.app
+          file "$APP/ZephyrU"
+          xcrun vtool -show-build "$APP/ZephyrU" || true
+          du -sh "$APP"
+
+      - name: Package app
+        if: success() && env.BUILD_TARGET == 'ZephyrU'
+        run: |
+          cd build-ios/ios/Release-iphoneos
+          zip -qry "$GITHUB_WORKSPACE/ZephyrU.app.zip" ZephyrU.app
+          unzip -l "$GITHUB_WORKSPACE/ZephyrU.app.zip" | head -25
+
+      - name: Upload app bundle
+        if: success() && env.BUILD_TARGET == 'ZephyrU'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ZephyrU-app-${{ github.run_number }}
+          path: ZephyrU.app.zip
+          retention-days: 30
+
       # Persist the vcpkg binary cache even when configure or build fails, so
       # consecutive iterations do not rebuild all iOS dependencies.
       - name: Save vcpkg binary cache
