@@ -216,6 +216,19 @@ namespace
 		if (!failedWriteAccess.empty())
 			NSLog(@"[ZephyrU] write access test failed for %zu path(s)", failedWriteAccess.size());
 
+		// User-supplied decryption keys (never bundled). Documents/keys.txt is the
+		// Files-app accessible location; Cemu's KeyCache reads the user data path copy.
+		{
+			std::error_code keyEc;
+			const fs::path userKeys = documentsPath / "keys.txt";
+			const fs::path cemuKeys = supportPath / "keys.txt";
+			if (fs::exists(userKeys, keyEc) && !fs::exists(cemuKeys, keyEc))
+			{
+				fs::copy_file(userKeys, cemuKeys, keyEc);
+				NSLog(@"[ZephyrU] imported keys.txt from Documents");
+			}
+		}
+
 		GetConfigHandle().SetFilename(ActiveSettings::GetConfigPath("settings.xml").generic_wstring());
 		GetConfigHandle().Load();
 
@@ -349,7 +362,10 @@ namespace
 
 	if (matchedTitleId == 0)
 	{
-		cemuLog_log(LogType::Force, "ZephyrU: no title matched '{}' ({} known titles)", _pathToUtf8(gamePath), CafeTitleList::GetAllTitleIds().size());
+		TitleInfo probe(gamePath);
+		cemuLog_log(LogType::Force, "ZephyrU: no title matched '{}' ({} known titles, valid={} reason={})",
+		            _pathToUtf8(gamePath), CafeTitleList::GetAllTitleIds().size(), probe.IsValid() ? 1 : 0,
+		            (int)probe.GetInvalidReason());
 		if (error)
 			*error = MakeError(@"Cemu could not identify this title. Use a decrypted .wua image or a standalone .rpx.");
 		return NO;
