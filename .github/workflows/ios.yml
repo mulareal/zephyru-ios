@@ -46,10 +46,9 @@ jobs:
       - name: Install vcpkg
         run: |
           if [ ! -d "$RUNNER_TEMP/vcpkg/.git" ]; then
-            git clone --depth 1 https://github.com/microsoft/vcpkg.git "$RUNNER_TEMP/vcpkg"
+            # versioned manifests require the full port tree history (no shallow clone)
+            git clone https://github.com/microsoft/vcpkg.git "$RUNNER_TEMP/vcpkg"
           fi
-          # the manifest pins a baseline commit which a shallow clone does not contain
-          git -C "$RUNNER_TEMP/vcpkg" fetch --depth 1 origin f0fb3ddba5135b80982668de39dbaa139c00d281
           "$RUNNER_TEMP/vcpkg/bootstrap-vcpkg.sh" -disableMetrics
 
       - name: Use iOS-trimmed dependency manifest
