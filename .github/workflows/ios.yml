@@ -1,0 +1,95 @@
+name: iOS Build
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      build_target:
+        description: CMake target to build (e.g. CemuCommon, CemuCafe, ZephyrU)
+        required: false
+        default: ZephyrU
+        type: string
+      configure_only:
+        description: Stop after the CMake configure step
+        required: false
+        default: false
+        type: boolean
+
+concurrency:
+  group: ios-build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-ios:
+    # iOS 26 SDK requires the Xcode 26 toolchain image.
+    runs-on: macos-26
+    timeout-minutes: 360
+    env:
+      CEMU_SHA: 3310f3b8b184d64a62b89fd59088c799432badf5
+      BUILD_TARGET: ${{ github.event.inputs.build_target || 'ZephyrU' }}
+      CONFIGURE_ONLY: ${{ github.event.inputs.configure_only || 'false' }}
+
+    steps:
+      - name: Checkout ZephyrU port
+        uses: actions/checkout@v4
+
+      - name: Apply port to pinned Cemu
+        run: bash scripts/apply_port.sh "$GITHUB_WORKSPACE/cemu"
+
+      - name: Toolchain versions
+        run: |
+          xcodebuild -version
+          xcrun --sdk iphoneos --show-sdk-version
+          cmake --version
+
+      - name: Install vcpkg
+        run: |
+          if [ ! -d "$RUNNER_TEMP/vcpkg/.git" ]; then
+            git clone --depth 1 https://github.com/microsoft/vcpkg.git "$RUNNER_TEMP/vcpkg"
+          fi
+          "$RUNNER_TEMP/vcpkg/bootstrap-vcpkg.sh" -disableMetrics
+
+      - name: Use iOS-trimmed dependency manifest
+        run: cp scripts/ios-vcpkg.json cemu/vcpkg.json
+
+      - name: Restore vcpkg binary cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ github.workspace }}/vcpkg-bincache
+          key: vcpkg-bincache-${{ runner.os }}-${{ hashFiles('scripts/ios-vcpkg.json') }}-${{ env.CEMU_SHA }}
+
+      - name: Configure
+        env:
+          VCPKG_BINARY_SOURCES: "clear;files,${{ github.workspace }}/vcpkg-bincache,readwrite"
+        run: |
+          set -o pipefail
+          cmake -S cemu -B build-ios -G Xcode \
+            -DCMAKE_SYSTEM_NAME=iOS \
+            -DCMAKE_OSX_ARCHITECTURES=arm64 \
+            -DCMAKE_OSX_DEPLOYMENT_TARGET=26.0 \
+            -DCMAKE_XCODE_ATTRIBUTE_CODE_SIGNING_ALLOWED=NO \
+            -DCMAKE_XCODE_ATTRIBUTE_CODE_SIGN_IDENTITY="" \
+            -DCMAKE_TOOLCHAIN_FILE="$RUNNER_TEMP/vcpkg/scripts/buildsystems/vcpkg.cmake" \
+            -DVCPKG_TARGET_TRIPLET=arm64-ios \
+            -DENABLE_VCPKG=OFF \
+            -DCEMU_IOS=ON \
+            -DCMAKE_BUILD_TYPE=Release \
+            2>&1 | tee configure.log
+
+      - name: Build ${{ env.BUILD_TARGET }}
+        if: env.CONFIGURE_ONLY != 'true'
+        run: |
+          set -o pipefail
+          cmake --build build-ios --config Release --target "$BUILD_TARGET" -j 8 2>&1 | tee build.log
+
+      - name: Upload logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-build-logs-${{ github.run_number }}
+          path: |
+            configure.log
+            build.log
+          if-no-files-found: ignore
+          retention-days: 14

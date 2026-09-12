@@ -1,0 +1,132 @@
+// ZephyrU iOS platform layer
+// JIT capability probing and error presentation.
+//
+// Executable memory on iOS is only available to processes that the kernel
+// considers JIT-enabled (development-signed app with get-task-allow attached to
+// a debugger -> CS_DEBUGGED, or Apple-granted dynamic-codesigning for browser
+// engines). Without it, mmap(PROT_READ|PROT_WRITE|PROT_EXEC) succeeds but the
+// kernel silently strips execute permission on iOS.
+//
+// We therefore do not trust the mmap return value. We map a page, then query the
+// actual protection bits through mach_vm_region and look for VM_PROT_EXECUTE.
+// See docs/IOS_PORT_RESEARCH.md section 3.3/3.4 for sources.
+
+#include "IOSPlatformCallbacks.h"
+
+#include <atomic>
+#include <string>
+
+#include <sys/mman.h>
+
+#import <Foundation/Foundation.h>
+#import <UIKit/UIKit.h>
+#include <mach/mach.h>
+#include <mach/mach_vm.h>
+
+namespace
+{
+	std::atomic_int s_jitState{-1}; // -1 = unknown, 0 = unavailable, 1 = available
+	std::string s_jitDescription;
+
+	bool ProbeExecutableMemory()
+	{
+		const size_t pageSize = (size_t)getpagesize();
+		void* mapping = mmap(nullptr, pageSize * 4, PROT_READ | PROT_WRITE | PROT_EXEC,
+		                     MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+		if (mapping == MAP_FAILED)
+		{
+			s_jitDescription = "mmap(PROT_EXEC) failed: executable memory is not permitted for this process (no JIT entitlement / not debugged)";
+			return false;
+		}
+
+		bool executable = false;
+		mach_vm_address_t address = (mach_vm_address_t)(uintptr_t)mapping;
+		mach_vm_size_t regionSize = 0;
+		vm_region_basic_info_data_64_t info{};
+		mach_msg_type_number_t infoCount = VM_REGION_BASIC_INFO_COUNT_64;
+		mach_port_t objectName = MACH_PORT_NULL;
+		kern_return_t kr = mach_vm_region(mach_task_self(), &address, &regionSize, VM_REGION_BASIC_INFO_64,
+		                                  (vm_region_info_t)&info, &infoCount, &objectName);
+		if (kr == KERN_SUCCESS)
+			executable = (info.protection & VM_PROT_EXECUTE) != 0;
+
+		munmap(mapping, pageSize * 4);
+
+		if (executable)
+		{
+			s_jitDescription = "Executable memory available (JIT enabled)";
+			return true;
+		}
+
+		s_jitDescription = "mmap(PROT_EXEC) succeeded but the kernel stripped execute permission "
+		                   "(iOS JIT restriction). Enable JIT with a development-signed build attached to a debugger "
+		                   "(StikDebug/Jitterbug-style) to use the AArch64 recompiler.";
+		return false;
+	}
+}
+
+extern "C" int IOSPlatform_IsJITAvailable(void)
+{
+	int state = s_jitState.load(std::memory_order_acquire);
+	if (state < 0)
+	{
+		state = ProbeExecutableMemory() ? 1 : 0;
+		s_jitState.store(state, std::memory_order_release);
+	}
+	return state;
+}
+
+extern "C" const char* IOSPlatform_GetJITStatusDescription(void)
+{
+	IOSPlatform_IsJITAvailable();
+	return s_jitDescription.c_str();
+}
+
+extern "C" void IOSPlatform_PresentError(const char* title, const char* message, int category)
+{
+	NSString* t = title && title[0] ? [NSString stringWithUTF8String:title] : @"ZephyrU";
+	NSString* m = message ? [NSString stringWithUTF8String:message] : @"";
+	NSLog(@"[ZephyrU][error][%d] %@: %@", category, t, m);
+
+	dispatch_async(dispatch_get_main_queue(), ^{
+		UIViewController* root = nil;
+		for (UIScene* scene in UIApplication.sharedApplication.connectedScenes)
+		{
+			if (![scene isKindOfClass:[UIWindowScene class]])
+				continue;
+			for (UIWindow* window in ((UIWindowScene*)scene).windows)
+			{
+				if (window.isKeyWindow && window.rootViewController)
+				{
+					root = window.rootViewController;
+					break;
+				}
+			}
+			if (root)
+				break;
+		}
+		if (!root)
+			return;
+
+		while (root.presentedViewController)
+			root = root.presentedViewController;
+
+		UIAlertController* alert = [UIAlertController alertControllerWithTitle:t message:m preferredStyle:UIAlertControllerStyleAlert];
+		[alert addAction:[UIAlertAction actionWithTitle:@"OK" style:UIAlertActionStyleDefault handler:nil]];
+		[root presentViewController:alert animated:YES completion:nil];
+	});
+}
+
+extern "C" void IOSPlatform_NotifyGameLoaded(void)
+{
+	dispatch_async(dispatch_get_main_queue(), ^{
+		[[NSNotificationCenter defaultCenter] postNotificationName:@"ZephyrUGameLoaded" object:nil];
+	});
+}
+
+extern "C" void IOSPlatform_NotifyGameExited(void)
+{
+	dispatch_async(dispatch_get_main_queue(), ^{
+		[[NSNotificationCenter defaultCenter] postNotificationName:@"ZephyrUGameExited" object:nil];
+	});
+}

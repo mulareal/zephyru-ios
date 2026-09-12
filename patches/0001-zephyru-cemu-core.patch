@@ -1,0 +1,397 @@
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index 644032c..aaeb815 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -4,6 +4,22 @@ option(ENABLE_VCPKG "Enable the vcpkg package manager" ON)
+ option(MACOS_BUNDLE "The executable when built on macOS will be created as an application bundle" OFF)
+ option(ALLOW_PORTABLE "Allow Cemu to be run in portable mode" ON)
+ 
++# ZephyrU: build the iOS platform target (libcemu_core equivalent + UIKit app)
++option(CEMU_IOS "Build Cemu for iOS (ZephyrU)" OFF)
++
++if (CEMU_IOS)
++	add_compile_definitions(CEMU_IOS=1)
++	# desktop-only components are never used on iOS
++	set(ENABLE_WXWIDGETS OFF CACHE BOOL "" FORCE)
++	set(ENABLE_OPENGL OFF CACHE BOOL "" FORCE)
++	set(ENABLE_VULKAN OFF CACHE BOOL "" FORCE)
++	set(ENABLE_CUBEB OFF CACHE BOOL "" FORCE)
++	set(ENABLE_SDL OFF CACHE BOOL "" FORCE)
++	set(ENABLE_LIBUSB OFF CACHE BOOL "" FORCE)
++	set(ENABLE_HIDAPI OFF CACHE BOOL "" FORCE)
++	set(ENABLE_DISCORD_RPC OFF CACHE BOOL "" FORCE)
++endif()
++
+ # used by CI script to set version:
+ set(EMULATOR_VERSION_MAJOR "0" CACHE STRING "")
+ set(EMULATOR_VERSION_MINOR "0" CACHE STRING "")
+@@ -99,7 +115,9 @@ endif()
+ 
+ if (APPLE)
+     enable_language(OBJC OBJCXX)
+-    set(CMAKE_OSX_DEPLOYMENT_TARGET "13.4")
++    if (NOT CMAKE_OSX_DEPLOYMENT_TARGET)
++        set(CMAKE_OSX_DEPLOYMENT_TARGET "13.4")
++    endif()
+ endif()
+ 
+ if (UNIX AND NOT APPLE)
+@@ -269,3 +287,7 @@ if (NOT ZArchive_FOUND)
+ endif()
+ 
+ add_subdirectory(src)
++
++if (CEMU_IOS)
++	add_subdirectory(ios)
++endif()
+diff --git a/src/CMakeLists.txt b/src/CMakeLists.txt
+index d8378c3..dabb54a 100644
+--- a/src/CMakeLists.txt
++++ b/src/CMakeLists.txt
+@@ -64,6 +64,7 @@ add_subdirectory(util)
+ add_subdirectory(imgui)
+ add_subdirectory(resource)
+ 
++if (NOT CEMU_IOS)
+ add_executable(CemuBin
+ 	main.cpp
+ 	mainLLE.cpp
+@@ -229,3 +230,5 @@ endif()
+ if (BSD)
+ 	target_link_libraries(CemuBin PRIVATE execinfo SPIRV-Tools SPIRV-Tools-opt)
+ endif()
++
++endif() # NOT CEMU_IOS
+diff --git a/src/Cafe/CMakeLists.txt b/src/Cafe/CMakeLists.txt
+index b509e72..3cb5acf 100644
+--- a/src/Cafe/CMakeLists.txt
++++ b/src/Cafe/CMakeLists.txt
+@@ -548,7 +548,7 @@ if (ENABLE_VULKAN)
+   )
+ endif()
+ 
+-if(APPLE)
++if(APPLE AND NOT CEMU_IOS)
+ 	target_sources(CemuCafe PRIVATE
+ 	    HW/Latte/Renderer/MetalView.mm
+ 	    HW/Latte/Renderer/MetalView.h
+@@ -581,7 +581,6 @@ if(ENABLE_METAL)
+         HW/Latte/Renderer/Metal/MetalDepthStencilCache.cpp
+         HW/Latte/Renderer/Metal/MetalDepthStencilCache.h
+         HW/Latte/Renderer/Metal/MetalLayer.h
+-        HW/Latte/Renderer/Metal/MetalLayer.mm
+         HW/Latte/Renderer/Metal/MetalLayerHandle.cpp
+         HW/Latte/Renderer/Metal/MetalLayerHandle.h
+         HW/Latte/Renderer/Metal/MetalMemoryManager.cpp
+@@ -618,6 +617,13 @@ if(ENABLE_METAL)
+     )
+ endif()
+ 
++# The AppKit CAMetalLayer host is replaced by the iOS platform library on iOS.
++if (ENABLE_METAL AND NOT CEMU_IOS)
++    target_sources(CemuCafe PRIVATE
++        HW/Latte/Renderer/Metal/MetalLayer.mm
++    )
++endif()
++
+ if(CEMU_ARCHITECTURE MATCHES "(aarch64)|(AARCH64)|(arm64)|(ARM64)")
+   target_sources(CemuCafe PRIVATE
+     HW/Espresso/Recompiler/BackendAArch64/BackendAArch64.cpp
+diff --git a/src/audio/CMakeLists.txt b/src/audio/CMakeLists.txt
+index 7f2d626..ddd86d0 100644
+--- a/src/audio/CMakeLists.txt
++++ b/src/audio/CMakeLists.txt
+@@ -30,6 +30,15 @@ if(ENABLE_CUBEB)
+ 	#add_compile_definitions(HAS_CUBEB)
+ endif()
+ 
++if(CEMU_IOS)
++	# AudioUnit backend lives in the iOS platform directory
++	target_include_directories(CemuAudio PRIVATE "${CMAKE_SOURCE_DIR}")
++	target_link_libraries(CemuAudio PUBLIC
++		"-framework AudioToolbox"
++		"-framework AVFAudio"
++	)
++endif()
++
+ target_include_directories(CemuAudio PUBLIC "../")
+ 
+ target_link_libraries(CemuAudio PRIVATE
+diff --git a/src/audio/IAudioAPI.cpp b/src/audio/IAudioAPI.cpp
+index dc266ee..fe7389c 100644
+--- a/src/audio/IAudioAPI.cpp
++++ b/src/audio/IAudioAPI.cpp
+@@ -9,6 +9,9 @@
+ #if HAS_CUBEB
+ #include "CubebAPI.h"
+ #endif
++#if defined(CEMU_IOS)
++#include "ios/platform/AudioUnitAPI.h"
++#endif
+ 
+ std::shared_mutex g_audioMutex;
+ AudioAPIPtr g_tvAudio;
+@@ -87,6 +90,9 @@ void IAudioAPI::InitializeStatic()
+ #if HAS_CUBEB
+ 	s_availableApis[Cubeb] = CubebAPI::InitializeStatic();
+ #endif
++#if defined(CEMU_IOS)
++	s_availableApis[AudioUnit] = AudioUnitAPI::InitializeStatic();
++#endif
+ }
+ 
+ bool IAudioAPI::IsAudioAPIAvailable(AudioAPI api)
+@@ -163,6 +169,12 @@ AudioAPIPtr IAudioAPI::CreateDevice(AudioAPI api, const DeviceDescriptionPtr& de
+ 		const auto tmp = std::dynamic_pointer_cast<CubebAPI::CubebDeviceDescription>(device);
+ 		return std::make_unique<CubebAPI>(tmp->GetDeviceId(), samplerate, channels, samples_per_block, bits_per_sample);
+ 	}
++#endif
++#if defined(CEMU_IOS)
++	case AudioUnit:
++	{
++		return std::make_unique<AudioUnitAPI>(samplerate, channels, samples_per_block, bits_per_sample);
++	}
+ #endif
+ 	default:
+ 		throw std::runtime_error(fmt::format("invalid audio api: {}", api));
+@@ -195,6 +207,12 @@ std::vector<IAudioAPI::DeviceDescriptionPtr> IAudioAPI::GetDevices(AudioAPI api)
+ 	{
+ 		return CubebAPI::GetDevices();
+ 	}
++#endif
++#if defined(CEMU_IOS)
++	case AudioUnit:
++	{
++		return AudioUnitAPI::GetDevices();
++	}
+ #endif
+ 	default:
+ 		throw std::runtime_error(fmt::format("invalid audio api: {}", api));
+diff --git a/src/audio/IAudioAPI.h b/src/audio/IAudioAPI.h
+index 34df421..f71e902 100644
+--- a/src/audio/IAudioAPI.h
++++ b/src/audio/IAudioAPI.h
+@@ -45,6 +45,7 @@ public:
+ 		XAudio27,
+ 		XAudio2,
+ 		Cubeb,
++		AudioUnit, // iOS (ZephyrU)
+ 
+ 		AudioAPIEnd,
+ 	};
+diff --git a/src/input/CMakeLists.txt b/src/input/CMakeLists.txt
+index 4978ef0..cc876f3 100644
+--- a/src/input/CMakeLists.txt
++++ b/src/input/CMakeLists.txt
+@@ -98,6 +98,19 @@ if(ENABLE_SDL)
+ 	target_link_libraries(CemuInput PRIVATE	SDL3::SDL3)
+ endif()
+ 
++if(CEMU_IOS)
++	# GameController.framework provider lives in the iOS platform directory
++	target_include_directories(CemuInput PRIVATE "${CMAKE_SOURCE_DIR}")
++	target_sources(CemuInput PRIVATE
++		../ios/platform/GameControllerProvider.cpp
++		../ios/platform/GameControllerProvider.h
++	)
++	target_link_libraries(CemuInput PUBLIC
++		"-framework GameController"
++		"-framework Foundation"
++	)
++endif()
++
+ target_include_directories(CemuInput PUBLIC "../")
+ 
+ target_link_libraries(CemuInput PRIVATE
+diff --git a/src/input/ControllerFactory.cpp b/src/input/ControllerFactory.cpp
+index 3827e1d..0e58bfd 100644
+--- a/src/input/ControllerFactory.cpp
++++ b/src/input/ControllerFactory.cpp
+@@ -22,6 +22,10 @@
+ #include "input/api/SDL/SDLController.h"
+ #endif
+ 
++#if defined(CEMU_IOS)
++#include "ios/platform/GameControllerProvider.h"
++#endif
++
+ ControllerPtr ControllerFactory::CreateController(InputAPI::Type api, std::string_view uuid,
+                                                   std::string_view display_name)
+ {
+@@ -86,6 +90,14 @@ ControllerPtr ControllerFactory::CreateController(InputAPI::Type api, std::strin
+ 			return std::make_shared<DSUController>(index);
+ 		}
+ #endif
++#if defined(CEMU_IOS)
++	case InputAPI::IOSController:
++		{
++			if (display_name.empty())
++				return std::make_shared<GameControllerController>(uuid, std::string_view("Game Controller"));
++			return std::make_shared<GameControllerController>(uuid, display_name);
++		}
++#endif
+ #if defined(HAS_GAMECUBE) && HAS_GAMECUBE && defined(HAS_LIBUSB)
+ 	case InputAPI::GameCube:
+ 		{
+@@ -175,6 +187,10 @@ ControllerProviderPtr ControllerFactory::CreateControllerProvider(InputAPI::Type
+ #if HAS_WIIMOTE
+ 	case InputAPI::Wiimote:
+ 		return std::make_shared<WiimoteControllerProvider>();
++#endif
++#if defined(CEMU_IOS)
++	case InputAPI::IOSController:
++		return std::make_shared<GameControllerProvider>();
+ #endif
+ 	default:
+ 		cemu_assert_debug(false);
+diff --git a/src/input/InputManager.cpp b/src/input/InputManager.cpp
+index 42b1db2..1de9f61 100644
+--- a/src/input/InputManager.cpp
++++ b/src/input/InputManager.cpp
+@@ -46,6 +46,9 @@ InputManager::InputManager()
+ #if HAS_WIIMOTE
+ 	create_provider<WiimoteControllerProvider>();
+ #endif
++#if defined(CEMU_IOS)
++	create_provider<GameControllerProvider>();
++#endif
+ 
+ 	m_update_thread_shutdown.store(false);
+ 	m_update_thread = std::thread(&InputManager::update_thread, this);
+diff --git a/src/input/InputManager.h b/src/input/InputManager.h
+index b510474..9213a73 100644
+--- a/src/input/InputManager.h
++++ b/src/input/InputManager.h
+@@ -13,6 +13,10 @@
+ #include "input/api/SDL/SDLControllerProvider.h"
+ #endif
+ 
++#if defined(CEMU_IOS)
++#include "ios/platform/GameControllerProvider.h"
++#endif
++
+ #include "input/api/Keyboard/KeyboardControllerProvider.h"
+ #include "input/api/DSU/DSUControllerProvider.h"
+ #include "input/api/GameCube/GameCubeControllerProvider.h"
+diff --git a/src/input/api/InputAPI.h b/src/input/api/InputAPI.h
+index a5f1f92..c30c5c1 100644
+--- a/src/input/api/InputAPI.h
++++ b/src/input/api/InputAPI.h
+@@ -17,6 +17,8 @@ namespace InputAPI
+ 		WGIGamepad,
+ 		WGIRawController,
+ 
++		IOSController, // GameController.framework on iOS (ZephyrU)
++
+ 		MAX
+ 	};
+ 
+@@ -42,6 +44,8 @@ namespace InputAPI
+ 			return "WGIRawController";
+ 		case SDLController:
+ 			return "SDLController";
++		case IOSController:
++			return "GameController";
+ 		default:
+ 			break;
+ 		}
+diff --git a/src/input/emulated/ProController.cpp b/src/input/emulated/ProController.cpp
+index bb584c1..e2adb5b 100644
+--- a/src/input/emulated/ProController.cpp
++++ b/src/input/emulated/ProController.cpp
+@@ -137,6 +137,45 @@ bool ProController::set_default_mapping(const std::shared_ptr<ControllerBase>& c
+ 	std::vector<std::pair<uint64, uint64>> mapping;
+ 	switch (controller->api())
+ 	{
++#if defined(CEMU_IOS)
++	case InputAPI::IOSController:
++	{
++		mapping =
++		{
++			{kButtonId_A, kButton1},
++			{kButtonId_B, kButton0},
++			{kButtonId_X, kButton3},
++			{kButtonId_Y, kButton2},
++
++			{kButtonId_L, kButton9},
++			{kButtonId_R, kButton10},
++			{kButtonId_ZL, kTriggerXP},
++			{kButtonId_ZR, kTriggerYP},
++
++			{kButtonId_Plus, kButton6},
++			{kButtonId_Minus, kButton4},
++
++			{kButtonId_Up, kButton11},
++			{kButtonId_Down, kButton12},
++			{kButtonId_Left, kButton13},
++			{kButtonId_Right, kButton14},
++
++			{kButtonId_StickL, kButton7},
++			{kButtonId_StickR, kButton8},
++
++			{kButtonId_StickL_Up, kAxisYN},
++			{kButtonId_StickL_Down, kAxisYP},
++			{kButtonId_StickL_Left, kAxisXN},
++			{kButtonId_StickL_Right, kAxisXP},
++
++			{kButtonId_StickR_Up, kRotationYN},
++			{kButtonId_StickR_Down, kRotationYP},
++			{kButtonId_StickR_Left, kRotationXN},
++			{kButtonId_StickR_Right, kRotationXP},
++		};
++		break;
++	}
++#endif
+ #ifdef HAS_SDL
+ 	case InputAPI::SDLController: {
+ 		const auto sdl_controller = std::static_pointer_cast<SDLController>(controller);
+diff --git a/src/input/emulated/VPADController.cpp b/src/input/emulated/VPADController.cpp
+index a791c5f..9ae51bf 100644
+--- a/src/input/emulated/VPADController.cpp
++++ b/src/input/emulated/VPADController.cpp
+@@ -513,6 +513,45 @@ bool VPADController::set_default_mapping(const std::shared_ptr<ControllerBase>&
+ 	std::vector<std::pair<uint64, uint64>> mapping;
+ 	switch (controller->api())
+ 	{
++#if defined(CEMU_IOS)
++	case InputAPI::IOSController:
++	{
++		mapping =
++		{
++			{kButtonId_A, kButton1},
++			{kButtonId_B, kButton0},
++			{kButtonId_X, kButton3},
++			{kButtonId_Y, kButton2},
++
++			{kButtonId_L, kButton9},
++			{kButtonId_R, kButton10},
++			{kButtonId_ZL, kTriggerXP},
++			{kButtonId_ZR, kTriggerYP},
++
++			{kButtonId_Plus, kButton6},
++			{kButtonId_Minus, kButton4},
++
++			{kButtonId_Up, kButton11},
++			{kButtonId_Down, kButton12},
++			{kButtonId_Left, kButton13},
++			{kButtonId_Right, kButton14},
++
++			{kButtonId_StickL, kButton7},
++			{kButtonId_StickR, kButton8},
++
++			{kButtonId_StickL_Up, kAxisYN},
++			{kButtonId_StickL_Down, kAxisYP},
++			{kButtonId_StickL_Left, kAxisXN},
++			{kButtonId_StickL_Right, kAxisXP},
++
++			{kButtonId_StickR_Up, kRotationYN},
++			{kButtonId_StickR_Down, kRotationYP},
++			{kButtonId_StickR_Left, kRotationXN},
++			{kButtonId_StickR_Right, kRotationXP},
++		};
++		break;
++	}
++#endif
+ #ifdef HAS_SDL
+ 	case InputAPI::SDLController: {
+ 		const auto sdl_controller = std::static_pointer_cast<SDLController>(controller);

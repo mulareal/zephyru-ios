@@ -1,0 +1,11 @@
+# build outputs
+/build*/
+cemu/
+vcpkg-bincache/
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
+
+cemu-pristine/
