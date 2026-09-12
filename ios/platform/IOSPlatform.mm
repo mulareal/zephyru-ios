@@ -1,19 +1,21 @@
 // ZephyrU iOS platform layer
 // JIT capability probing and error presentation.
 //
-// Executable memory on iOS is only available to processes that the kernel
-// considers JIT-enabled (development-signed app with get-task-allow attached to
-// a debugger -> CS_DEBUGGED, or Apple-granted dynamic-codesigning for browser
-// engines). Without it, mmap(PROT_READ|PROT_WRITE|PROT_EXEC) succeeds but the
-// kernel silently strips execute permission on iOS.
-//
-// We therefore do not trust the mmap return value. We map a page, then query the
-// actual protection bits through mach_vm_region and look for VM_PROT_EXECUTE.
+// Executable memory on iOS is only available when the kernel's JIT policy allows
+// it (development-signed app attached to a debugger -> CS_DEBUGGED, Apple-granted
+// dynamic-codesigning, or an OS version that permits mprotect for development
+// builds). We do not trust mmap/mprotect return values: we map a page, write an
+// AArch64 "ret" stub, mark it executable and actually execute it while catching
+// a fault. This is the only reliable test, because mprotect(PROT_EXEC) can report
+// success on iOS while executing the page still faults.
 // See docs/IOS_PORT_RESEARCH.md section 3.3/3.4 for sources.
 
 #include "IOSPlatformCallbacks.h"
 
 #include <atomic>
+#include <mutex>
+#include <setjmp.h>
+#include <signal.h>
 #include <string>
 
 #include <sys/mman.h>
@@ -29,6 +31,8 @@ namespace
 	std::atomic_int s_jitState{-1}; // -1 = unknown, 0 = unavailable, 1 = available
 	std::string s_jitDescription;
 
+	std::mutex s_jitMutex;
+
 	bool RegionHasExecutePermission(void* mapping)
 	{
 		vm_address_t address = (vm_address_t)(uintptr_t)mapping;
@@ -41,51 +45,84 @@ namespace
 		return kr == KERN_SUCCESS && (info.protection & VM_PROT_EXECUTE) != 0;
 	}
 
-	bool ProbeExecutableMemory()
+	// On iOS mprotect(PROT_EXEC) can report success while executing the pages still
+	// faults (TXM/JIT policy). The only reliable check is to run a one-instruction
+	// stub and catch the fault, so the recompiler is never selected on a false positive.
+	sigjmp_buf s_executeTestJump;
+	volatile sig_atomic_t s_executeTestActive = 0;
+
+	void ExecuteTestSignalHandler(int signal)
+	{
+		if (s_executeTestActive)
+			siglongjmp(s_executeTestJump, 1);
+	}
+
+	bool ExecuteTest(void* mapping, size_t size)
+	{
+		if (size < 4)
+			return false;
+		// AArch64 "ret"
+		((uint32_t*)mapping)[0] = 0xD65F03C0;
+
+		struct sigaction handler{}, oldSegv{}, oldBus{};
+		handler.sa_handler = ExecuteTestSignalHandler;
+		sigemptyset(&handler.sa_mask);
+		handler.sa_flags = SA_NODEFER;
+		sigaction(SIGSEGV, &handler, &oldSegv);
+		sigaction(SIGBUS, &handler, &oldBus);
+
+		bool executed = false;
+		s_executeTestActive = 1;
+		if (sigsetjmp(s_executeTestJump, 1) == 0)
+		{
+			((void (*)())mapping)();
+			executed = true;
+		}
+		s_executeTestActive = 0;
+
+		sigaction(SIGSEGV, &oldSegv, nullptr);
+		sigaction(SIGBUS, &oldBus, nullptr);
+		return executed;
+	}
+
+	bool TryExecutableMapping(bool viaMprotect)
 	{
 		const size_t pageSize = (size_t)getpagesize();
 		const size_t mapSize = pageSize * 4;
-
-		// Realistic path first: xbyak (and therefore Cemu's recompiler) maps read/write
-		// and then flips the pages to executable via mprotect. With a debugger attached
-		// (CS_DEBUGGED) that succeeds even though a direct PROT_EXEC mapping is stripped.
-		{
-			void* mapping = mmap(nullptr, mapSize, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
-			if (mapping != MAP_FAILED)
-			{
-				const bool protectOk = mprotect(mapping, mapSize, PROT_READ | PROT_EXEC) == 0;
-				const bool executable = protectOk && RegionHasExecutePermission(mapping);
-				munmap(mapping, mapSize);
-				if (executable)
-				{
-					s_jitDescription = "Executable memory available via mprotect (JIT enabled, debugger attached)";
-					return true;
-				}
-			}
-		}
-
-		// Fallback: direct PROT_EXEC mapping (Apple dynamic-codesigning / allow-jit).
-		void* mapping = mmap(nullptr, mapSize, PROT_READ | PROT_WRITE | PROT_EXEC,
-		                     MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+		const int mapProtection = viaMprotect ? (PROT_READ | PROT_WRITE) : (PROT_READ | PROT_WRITE | PROT_EXEC);
+		void* mapping = mmap(nullptr, mapSize, mapProtection, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
 		if (mapping == MAP_FAILED)
+			return false;
+
+		if (viaMprotect && mprotect(mapping, mapSize, PROT_READ | PROT_EXEC) != 0)
 		{
-			s_jitDescription = "mmap/mprotect could not create executable memory. Attach a debugger "
-			                   "(StikDebug-class) to a development-signed build to enable the AArch64 recompiler.";
+			munmap(mapping, mapSize);
 			return false;
 		}
 
-		const bool executable = RegionHasExecutePermission(mapping);
+		const bool executable = RegionHasExecutePermission(mapping) && ExecuteTest(mapping, mapSize);
 		munmap(mapping, mapSize);
+		return executable;
+	}
 
-		if (executable)
+	bool ProbeExecutableMemory()
+	{
+		// Path xbyak uses: mmap read/write + mprotect to read/execute.
+		if (TryExecutableMapping(true))
 		{
-			s_jitDescription = "Executable memory available (JIT enabled)";
+			s_jitDescription = "Executable memory verified (mmap+mprotect; JIT enabled)";
 			return true;
 		}
 
-		s_jitDescription = "Executable memory was created but the kernel stripped execute permission "
-		                   "(iOS JIT restriction). Enable JIT with a development-signed build attached to a debugger "
-		                   "(StikDebug/Jitterbug-style) to use the AArch64 recompiler.";
+		// Apple dynamic-codesigning path: direct PROT_EXEC mapping.
+		if (TryExecutableMapping(false))
+		{
+			s_jitDescription = "Executable memory verified (PROT_EXEC mapping; JIT enabled)";
+			return true;
+		}
+
+		s_jitDescription = "Executable memory is not permitted for this process. Attach a debugger "
+		                   "(StikDebug-class) to a development-signed build to enable the AArch64 recompiler.";
 		return false;
 	}
 }
@@ -93,6 +130,11 @@ namespace
 extern "C" int IOSPlatform_IsJITAvailable(void)
 {
 	int state = s_jitState.load(std::memory_order_acquire);
+	if (state >= 0)
+		return state;
+
+	std::lock_guard<std::mutex> lock(s_jitMutex);
+	state = s_jitState.load(std::memory_order_relaxed);
 	if (state < 0)
 	{
 		state = ProbeExecutableMemory() ? 1 : 0;
