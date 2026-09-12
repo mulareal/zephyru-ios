@@ -97,6 +97,47 @@ index b509e72..3cb5acf 100644
  if(CEMU_ARCHITECTURE MATCHES "(aarch64)|(AARCH64)|(arm64)|(ARM64)")
    target_sources(CemuCafe PRIVATE
      HW/Espresso/Recompiler/BackendAArch64/BackendAArch64.cpp
+diff --git a/src/Common/cpu_features.cpp b/src/Common/cpu_features.cpp
+index cbc90a1..1131562 100644
+--- a/src/Common/cpu_features.cpp
++++ b/src/Common/cpu_features.cpp
+@@ -1,6 +1,6 @@
+ #include "cpu_features.h"
+ 
+-#if BOOST_OS_MACOS
++#if BOOST_OS_MACOS || defined(CEMU_IOS)
+ #include <sys/types.h>
+ #include <sys/sysctl.h>
+ #endif
+@@ -35,7 +35,7 @@ inline void cpuidex(int cpuInfo[4], int functionId, int subFunctionId) {
+ 
+ CPUFeaturesImpl::CPUFeaturesImpl()
+ {
+-#if BOOST_OS_MACOS
++#if BOOST_OS_MACOS || defined(CEMU_IOS)
+ 	std::string cpuName;
+ 	size_t size = 0;
+ 
+diff --git a/src/Common/unix/platform.cpp b/src/Common/unix/platform.cpp
+index 879ae4d..5ca352c 100644
+--- a/src/Common/unix/platform.cpp
++++ b/src/Common/unix/platform.cpp
+@@ -7,12 +7,13 @@ uint32_t GetTickCount()
+ 	struct timespec ts;
+ 	clock_gettime(CLOCK_MONOTONIC_RAW, &ts);
+ 	return (1000 * ts.tv_sec + ts.tv_nsec / 1000000);
+-#elif BOOST_OS_MACOS
++#elif BOOST_OS_MACOS || defined(CEMU_IOS)
+ 	return clock_gettime_nsec_np(CLOCK_MONOTONIC_RAW) / 1000000;
+ #elif BOOST_OS_BSD
+ 	struct timespec ts;
+ 	clock_gettime(CLOCK_MONOTONIC, &ts);
+ 	return (1000 * ts.tv_sec + ts.tv_nsec / 1000000);
++#else
++	return 0;
+ #endif
+-
+ }
 diff --git a/src/audio/CMakeLists.txt b/src/audio/CMakeLists.txt
 index 7f2d626..ddd86d0 100644
 --- a/src/audio/CMakeLists.txt
@@ -204,7 +245,7 @@ index 4978ef0..cc876f3 100644
  
  target_link_libraries(CemuInput PRIVATE
 diff --git a/src/input/ControllerFactory.cpp b/src/input/ControllerFactory.cpp
-index 3827e1d..0e58bfd 100644
+index 3827e1d..125fc07 100644
 --- a/src/input/ControllerFactory.cpp
 +++ b/src/input/ControllerFactory.cpp
 @@ -22,6 +22,10 @@
@@ -212,7 +253,7 @@ index 3827e1d..0e58bfd 100644
  #endif
  
 +#if defined(CEMU_IOS)
-+#include "ios/platform/GameControllerProvider.h"
++#include "ios/platform/GameControllerController.h"
 +#endif
 +
  ControllerPtr ControllerFactory::CreateController(InputAPI::Type api, std::string_view uuid,

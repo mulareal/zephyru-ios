@@ -67,4 +67,5 @@ Legend: **DONE** implemented, **SCAFFOLDED** code written but not yet compiled o
 
 | Run | Commit | Target | Result |
 |---|---|---|---|
-| (pending) | | CemuCommon → ZephyrU | first CI run not yet executed |
+| 34695711138 | 27414fe | CemuCommon | FAILED (configure): vcpkg shallow clone missing pinned baseline commit `f0fb3dd`; workflow fixed |
+| (pending) | | CemuCommon | re-run after vcpkg fetch fix + `Common/unix/platform.cpp` and `cpu_features.cpp` iOS guards |
