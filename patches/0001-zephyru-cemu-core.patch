@@ -359,9 +359,18 @@ index 34df421..f71e902 100644
  		AudioAPIEnd,
  	};
 diff --git a/src/config/CemuConfig.h b/src/config/CemuConfig.h
-index 48c396f..2735cdc 100644
+index 48c396f..0566419 100644
 --- a/src/config/CemuConfig.h
 +++ b/src/config/CemuConfig.h
+@@ -204,7 +204,7 @@ enum class CrashDump
+ 	Full
+ };
+ ENABLE_ENUM_ITERATORS(CrashDump, CrashDump::Disabled, CrashDump::Full);
+-#elif BOOST_OS_UNIX
++#elif BOOST_OS_UNIX || defined(CEMU_IOS)
+ enum class CrashDump
+ {
+ 	Disabled,
 @@ -410,7 +410,7 @@ struct CemuConfig
  	ConfigValue<std::string> proxy_server{};
  
