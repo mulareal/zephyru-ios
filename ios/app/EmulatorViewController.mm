@@ -88,10 +88,10 @@
 	[cemu setWindowSurface:self.view];
 	[self updateDrawableSize];
 
+	__weak EmulatorViewController* weakSelf = self;
 	if (!self.emulationStarted)
 	{
 		self.emulationStarted = YES;
-		__weak EmulatorViewController* weakSelf = self;
 		dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
 			NSError* error = nil;
 			if (![cemu loadGameAtPath:weakSelf.gameURL.path error:&error])
@@ -150,16 +150,16 @@
 - (void)updateTelemetry
 {
 	NSDictionary* telemetry = [[CemuIOS sharedInstance] telemetry];
-	static uint32 lastFrameCounter = 0;
+	static uint32_t lastFrameCounter = 0;
 	static NSTimeInterval lastSampleTime = 0;
 
-	const uint32 frameCounter = [telemetry[@"frameCounter"] unsignedIntValue];
+	const uint32_t frameCounter = (uint32_t)[telemetry[@"frameCounter"] unsignedIntValue];
 	const NSTimeInterval now = NSDate.date.timeIntervalSince1970;
 
 	double fps = 0.0;
 	if (lastSampleTime > 0 && now > lastSampleTime)
 	{
-		uint32 frames = frameCounter >= lastFrameCounter ? frameCounter - lastFrameCounter : (UINT32_MAX - lastFrameCounter + frameCounter);
+		uint32_t frames = frameCounter >= lastFrameCounter ? frameCounter - lastFrameCounter : (UINT32_MAX - lastFrameCounter + frameCounter);
 		fps = frames / (now - lastSampleTime);
 	}
 	lastFrameCounter = frameCounter;
