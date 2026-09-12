@@ -65,7 +65,10 @@ namespace
 		std::error_code ec;
 		if (fs::exists(path, ec))
 			return true;
-		return fs::create_directories(path, ec);
+		const bool created = fs::create_directories(path, ec);
+		if (!created)
+			NSLog(@"[ZephyrU] create_directories failed for '%s': %s", _pathToUtf8(path).c_str(), ec.message().c_str());
+		return created;
 	}
 
 	// Port of CemuApp::CreateDefaultMLCFiles (desktop UI free version)
@@ -200,12 +203,18 @@ namespace
 		const fs::path mlcPath = supportPath / "mlc01";
 		const fs::path gamesPath = documentsPath / "games";
 
+		NSLog(@"[ZephyrU] paths: documents='%s' support='%s' bundle='%s'",
+		      documentsPath.generic_string().c_str(), supportPath.generic_string().c_str(),
+		      bundlePath.generic_string().c_str());
+
 		// keep the data path fallback usable when the bundle copy is absent
 		std::error_code ec;
 		fs::path effectiveDataPath = fs::exists(dataPath, ec) ? dataPath : executablePath.parent_path();
 
 		std::set<fs::path> failedWriteAccess;
 		ActiveSettings::SetPaths(false, executablePath, userDataPath, configPath, cachePath, effectiveDataPath, failedWriteAccess);
+		if (!failedWriteAccess.empty())
+			NSLog(@"[ZephyrU] write access test failed for %zu path(s)", failedWriteAccess.size());
 
 		GetConfigHandle().SetFilename(ActiveSettings::GetConfigPath("settings.xml").generic_wstring());
 		GetConfigHandle().Load();
@@ -221,12 +230,17 @@ namespace
 
 		GetConfigHandle().Save();
 
+		NSLog(@"[ZephyrU] paths: userData='%s' data='%s' games='%s'",
+		      userDataPath.generic_string().c_str(), effectiveDataPath.generic_string().c_str(),
+		      gamesPath.generic_string().c_str());
+
 		if (!CreateDirectoriesIfNotExist(ActiveSettings::GetConfigPath("controllerProfiles")) ||
 		    !CreateDirectoriesIfNotExist(ActiveSettings::GetUserDataPath("memorySearcher")) ||
 		    !CreateDirectoriesIfNotExist(gamesPath))
 		{
 			if (error)
-				*error = MakeError(@"Failed to create ZephyrU application directories.");
+				*error = MakeError([NSString stringWithFormat:@"Failed to create ZephyrU application directories.\nuserData: %s\ngames: %s",
+				                                                    userDataPath.generic_string().c_str(), gamesPath.generic_string().c_str()]);
 			return NO;
 		}
 
