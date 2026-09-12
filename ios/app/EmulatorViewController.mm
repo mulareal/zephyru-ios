@@ -4,6 +4,20 @@
 
 #import "CemuIOSBridge.h"
 
+// The emulator view must be backed by a CAMetalLayer; the renderer draws into
+// the view's own layer (see ios/platform/MetalLayerIOS.mm).
+@interface EmulatorMetalView : UIView
+@end
+
+@implementation EmulatorMetalView
+
++ (Class)layerClass
+{
+	return [CAMetalLayer class];
+}
+
+@end
+
 @interface EmulatorViewController ()
 @property (nonatomic, strong) NSURL* gameURL;
 @property (nonatomic, strong) UILabel* telemetryLabel;
@@ -16,9 +30,9 @@
 
 @implementation EmulatorViewController
 
-+ (Class)layerClass
+- (void)loadView
 {
-	return [CAMetalLayer class];
+	self.view = [[EmulatorMetalView alloc] initWithFrame:UIScreen.mainScreen.bounds];
 }
 
 - (instancetype)initWithGameURL:(NSURL*)gameURL
