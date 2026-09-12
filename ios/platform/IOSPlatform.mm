@@ -25,6 +25,7 @@
 #import <UIKit/UIKit.h>
 #include <mach/mach.h>
 #include <mach/vm_map.h>
+#include <libkern/OSCacheControl.h>
 
 namespace
 {
@@ -57,13 +58,15 @@ namespace
 			siglongjmp(s_executeTestJump, 1);
 	}
 
-	bool ExecuteTest(void* mapping, size_t size)
+	// AArch64 "ret" (the stub must be written while the mapping is still writable).
+	void WriteRetStub(void* mapping)
 	{
-		if (size < 4)
-			return false;
-		// AArch64 "ret"
 		((uint32_t*)mapping)[0] = 0xD65F03C0;
+		sys_icache_invalidate(mapping, getpagesize());
+	}
 
+	bool ExecuteTest(void* mapping)
+	{
 		struct sigaction handler{}, oldSegv{}, oldBus{};
 		handler.sa_handler = ExecuteTestSignalHandler;
 		sigemptyset(&handler.sa_mask);
@@ -94,13 +97,15 @@ namespace
 		if (mapping == MAP_FAILED)
 			return false;
 
+		WriteRetStub(mapping);
+
 		if (viaMprotect && mprotect(mapping, mapSize, PROT_READ | PROT_EXEC) != 0)
 		{
 			munmap(mapping, mapSize);
 			return false;
 		}
 
-		const bool executable = RegionHasExecutePermission(mapping) && ExecuteTest(mapping, mapSize);
+		const bool executable = RegionHasExecutePermission(mapping) && ExecuteTest(mapping);
 		munmap(mapping, mapSize);
 		return executable;
 	}
