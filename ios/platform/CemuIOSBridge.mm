@@ -363,11 +363,19 @@ namespace
 	if (matchedTitleId == 0)
 	{
 		TitleInfo probe(gamePath);
+		const int invalidReason = (int)probe.GetInvalidReason();
 		cemuLog_log(LogType::Force, "ZephyrU: no title matched '{}' ({} known titles, valid={} reason={})",
 		            _pathToUtf8(gamePath), CafeTitleList::GetAllTitleIds().size(), probe.IsValid() ? 1 : 0,
-		            (int)probe.GetInvalidReason());
+		            invalidReason);
 		if (error)
-			*error = MakeError(@"Cemu could not identify this title. Use a decrypted .wua image or a standalone .rpx.");
+		{
+			NSString* message = @"Cemu could not identify this title. Use a decrypted .wua image, a standalone .rpx, or place your keys.txt in the app's Documents folder.";
+			if (invalidReason == 3) // NO_DISC_KEY
+				message = @"This disc image is encrypted and Cemu has no disc key for it. Copy your keys.txt into the app's Documents folder (Files app > On My iPhone > ZephyrU) and start again, or use a decrypted dump.";
+			else if (invalidReason == 4) // NO_TITLE_TIK / MISSING_XML_FILES
+				message = @"This disc image is missing its title key or meta files. Add the correct key to keys.txt in the app's Documents folder, or use a decrypted dump.";
+			*error = MakeError(message);
+		}
 		return NO;
 	}
 	cemuLog_log(LogType::Force, "ZephyrU: loading title {:016x} from '{}'", (uint64)matchedTitleId, _pathToUtf8(gamePath));
