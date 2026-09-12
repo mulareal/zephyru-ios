@@ -17,11 +17,12 @@
 #include <string>
 
 #include <sys/mman.h>
+#include <unistd.h>
 
 #import <Foundation/Foundation.h>
 #import <UIKit/UIKit.h>
 #include <mach/mach.h>
-#include <mach/mach_vm.h>
+#include <mach/vm_map.h>
 
 namespace
 {
@@ -40,13 +41,13 @@ namespace
 		}
 
 		bool executable = false;
-		mach_vm_address_t address = (mach_vm_address_t)(uintptr_t)mapping;
-		mach_vm_size_t regionSize = 0;
+		vm_address_t address = (vm_address_t)(uintptr_t)mapping;
+		vm_size_t regionSize = 0;
 		vm_region_basic_info_data_64_t info{};
 		mach_msg_type_number_t infoCount = VM_REGION_BASIC_INFO_COUNT_64;
 		mach_port_t objectName = MACH_PORT_NULL;
-		kern_return_t kr = mach_vm_region(mach_task_self(), &address, &regionSize, VM_REGION_BASIC_INFO_64,
-		                                  (vm_region_info_t)&info, &infoCount, &objectName);
+		kern_return_t kr = vm_region_64(mach_task_self(), &address, &regionSize, VM_REGION_BASIC_INFO_64,
+		                                (vm_region_info_t)&info, &infoCount, &objectName);
 		if (kr == KERN_SUCCESS)
 			executable = (info.protection & VM_PROT_EXECUTE) != 0;
 

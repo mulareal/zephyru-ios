@@ -29,8 +29,8 @@ void* CreateMetalLayer(void* handle, float& scaleX, float& scaleY)
 		[view.layer addSublayer:layer];
 	}
 
-	UIScreen* screen = view.window.screen ?: UIScreen.mainScreen;
-	const CGFloat scale = screen.scale;
+	UIScreen* screen = view.window.windowScene.screen ?: view.window.screen;
+	const CGFloat scale = screen ? screen.scale : 2.0;
 	scaleX = (float)scale;
 	scaleY = (float)scale;
 
