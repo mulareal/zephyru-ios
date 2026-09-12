@@ -92,6 +92,12 @@ https://github.com/users/mulareal/projects/6
 - **No executable-memory allocation in static initializers.** Global xbyak `CodeGenerator`s
   (`AArch64GenContext_t`) abort before `main` when JIT is unavailable; construct code generators
   lazily (see `PPCRecompilerAArch64Gen_generateRecompilerInterfaceFunctions`).
+- **`mprotect(PROT_EXEC)` can succeed while execution still faults on iOS.** The JIT probe must
+  execute a stub (see `IOSPlatform.mm`), not just inspect `vm_region` protection.
+- **Encrypted disc images need a user-supplied `keys.txt`.** Cemu's `KeyCache` reads it from the
+  user data path; the bridge copies `Documents/keys.txt` there when present. Never bundle keys.
+  `NO_DISC_KEY` (invalid reason 3) in the log means the user must supply keys or use a decrypted
+  dump.
 - Never commit game files, keys, or saves. The user supplies their own title.
 
 ## Definition of done for any work

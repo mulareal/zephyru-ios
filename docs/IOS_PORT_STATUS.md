@@ -40,7 +40,7 @@ M2 (title metadata) onward still need a user-imported title; the scan path `Docu
 |---|---|---|---|
 | M0 | iOS application launches | **DONE** (device) | CI artifact run 34714878411 re-signed + installed on iPhone 17 Pro (iOS 27.0); UI, JIT-status row, background/foreground verified; process survives Settings foregrounding; see bring-up log below |
 | M1 | Cemu core initializes | **DONE** (device) | `log.txt`: `ZephyrU: core initialized (JIT: no)`; `mlc01` (sys/usr titles, save dirs, `language.txt`, `country.txt`, `PlayDiary.dat`), `settings.xml`, `controllerProfiles`, `memorySearcher`, `Documents/games` all created |
-| M2 | Game metadata readable | SCAFFOLDED | `CafeTitleList` initialized with Documents/games scan path; `.rpx` standalone path supported directly; needs a user-imported title to verify |
+| M2 | Game metadata readable | BLOCKED (user input) | First real title imported (`.wux`, Wind Waker HD EU) and listed by the app; `TitleInfo` parse returns `NO_DISC_KEY` (invalid reason 3) because the image is encrypted. `Documents/keys.txt` is copied to the user data path for Cemu's KeyCache; needs the user's own keys or a decrypted dump |
 | M3 | Wind Waker HD executable loads | TODO | `PrepareForegroundTitle`/`â€¦FromStandaloneRPX` wired; needs device run |
 | M4 | First PowerPC code executes | TODO | depends on M3; fiber scheduler now has a working iOS backend (libucontext) |
 | M5 | First GX2 commands execute | TODO | Metal renderer + iOS CAMetalLayer surface compiled |
@@ -71,6 +71,7 @@ M2 (title metadata) onward still need a user-imported title; the scan path `Docu
 | Default controller mapping for `IOSController` | DONE (build) | none | verify button mapping on device |
 | File import (`UIDocumentPicker` â†’ Documents/games) | DONE (build) | none | device test |
 | Save data path (MLC in Application Support) | DONE (device) | crash-consistency hardening | add flush-on-background |
+| User key import (`Documents/keys.txt` → user data) | DONE (build) | needs a title that requires keys to verify end to end | user supplies keys.txt |
 | JIT capability probe + UI status | DONE (device) | device reports `AArch64 recompiler: unavailable` without debugger, as designed | validate JIT path with debugger attach (StikDebug-class) |
 | MetalFX frame interpolation / upscaling | TODO | needs JIT for full-speed rendering, motion-vector synthesis design | research Â§5 |
 | Performance overlay (EMU/DISPLAY/GENERATED FPS, speed %) | SCAFFOLDED | only frame counters for now | extend bridge telemetry with per-stage timings |
@@ -127,6 +128,11 @@ All runs use GitHub Actions `macos-26` (Xcode 26.6, iPhoneOS 26.5 SDK), target `
 | 34712079129 | SUCCESS | path diagnostics; found `controllerProfiles` created relative (LTO symbol duplication) |
 | 34713931394 | SUCCESS | LTO disabled on iOS; `nm` shows single `ActiveSettings::s_config_path` / `GetConfigHandle()::config` |
 | 34714878411 | SUCCESS | `cemuLog_createLogFile` in core init; M0+M1 verified on device (`core initialized (JIT: no)`) |
+| 34716250963 | SUCCESS | emulator view backed by CAMetalLayer (fixes start crash); title load reaches title identification |
+| 34717177861 | SUCCESS | swipe-to-delete for imported games |
+| 34718970910 | SUCCESS | parse reason logged; `NO_DISC_KEY` for the imported `.wux`; keys.txt import from Documents |
+| 34719375285 | SUCCESS | JIT probe via mmap+mprotect: reported available without a debugger (false positive) |
+| adb082b | PENDING | probe executes a `ret` stub to verify executable memory for real |
 
 ## Device bring-up log (iPhone 17 Pro, iOS 27.0 `24A5430a`)
 
@@ -154,6 +160,23 @@ Three issues were found and fixed on the way to M1:
 For debug builds, `devicectl` already forwards the app's `stderr` when launched with `--console`;
 `NSLog` output appears there. `cemuLog` output is written to `log.txt` in the app's Application
 Support directory.
+
+### Title loading and JIT findings
+
+- First imported title (`.wux`) fails to parse with `invalid reason 3` (`NO_DISC_KEY`): the image is
+  encrypted. ZephyrU copies a user-supplied `Documents/keys.txt` into the user data path, where
+  Cemu's `KeyCache` reads it; no keys are ever bundled. A decrypted `.wua`/`.rpx` avoids this.
+- `-[EmulatorViewController viewDidLoad]` used to crash because the `layerClass` override sat on
+  the view controller instead of a `UIView`; the emulator view is now an `EmulatorMetalView`.
+- Unattended test hooks: `--autostart` starts the first imported game, `--autostop <seconds>`
+  stops it, and a telemetry line (`running`, `frameCounter`, `drawCalls`, compiled shaders,
+  thermal state) is written to `log.txt` every ~4 s.
+- The game list supports swipe-to-delete for imported games.
+- JIT probe: `mprotect(PROT_EXEC)` can *report* success on iOS while execution still faults, so the
+  probe now writes an AArch64 `ret` stub and executes it under a signal guard. The recompiler is
+  only selected when execution actually works.
+- LLDB attach works with `devicectl device process launch --start-stopped` followed by
+  `device process attach -p <pid> -c` in `xcrun lldb` (Xcode 26.5).
 
 Pre-emptive iOS fixes applied while builds ran (verified against Darwin APIs):
 `GetTickCount`, `HighResolutionTimer`, `pthread_setname_np`, `cpu_features`, `MMU.h` endian macros,
