@@ -251,6 +251,9 @@ namespace
 			return NO;
 		}
 
+		// The desktop frontend starts this; without it cemuLog output is only buffered.
+		cemuLog_createLogFile(false);
+
 		AES128_init();
 		PPCTimer_init();
 		ExceptionHandler_Init();
