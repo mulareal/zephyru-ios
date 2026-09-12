@@ -271,16 +271,22 @@ index 879ae4d..5ca352c 100644
 -
  }
 diff --git a/src/audio/CMakeLists.txt b/src/audio/CMakeLists.txt
-index 7f2d626..ddd86d0 100644
+index 7f2d626..274d9fb 100644
 --- a/src/audio/CMakeLists.txt
 +++ b/src/audio/CMakeLists.txt
-@@ -30,6 +30,15 @@ if(ENABLE_CUBEB)
+@@ -30,6 +30,21 @@ if(ENABLE_CUBEB)
  	#add_compile_definitions(HAS_CUBEB)
  endif()
  
 +if(CEMU_IOS)
 +	# AudioUnit backend lives in the iOS platform directory
 +	target_include_directories(CemuAudio PRIVATE "${CMAKE_SOURCE_DIR}")
++	target_sources(CemuAudio PRIVATE
++		${CMAKE_SOURCE_DIR}/ios/platform/AudioUnitAPI.h
++		${CMAKE_SOURCE_DIR}/ios/platform/AudioUnitAPI.mm
++	)
++	set_source_files_properties(${CMAKE_SOURCE_DIR}/ios/platform/AudioUnitAPI.mm
++		PROPERTIES COMPILE_OPTIONS "-fobjc-arc")
 +	target_link_libraries(CemuAudio PUBLIC
 +		"-framework AudioToolbox"
 +		"-framework AVFAudio"
@@ -366,10 +372,10 @@ index 48c396f..2735cdc 100644
  #else
  #define DISABLE_SCREENSAVER_DEFAULT true
 diff --git a/src/input/CMakeLists.txt b/src/input/CMakeLists.txt
-index 4978ef0..7d1468d 100644
+index 4978ef0..3eccc2c 100644
 --- a/src/input/CMakeLists.txt
 +++ b/src/input/CMakeLists.txt
-@@ -98,6 +98,20 @@ if(ENABLE_SDL)
+@@ -98,6 +98,22 @@ if(ENABLE_SDL)
  	target_link_libraries(CemuInput PRIVATE	SDL3::SDL3)
  endif()
  
@@ -377,10 +383,12 @@ index 4978ef0..7d1468d 100644
 +	# GameController.framework provider lives in the iOS platform directory
 +	target_include_directories(CemuInput PRIVATE "${CMAKE_SOURCE_DIR}")
 +	target_sources(CemuInput PRIVATE
-+		${CMAKE_SOURCE_DIR}/ios/platform/GameControllerProvider.cpp
++		${CMAKE_SOURCE_DIR}/ios/platform/GameControllerProvider.mm
 +		${CMAKE_SOURCE_DIR}/ios/platform/GameControllerProvider.h
 +		${CMAKE_SOURCE_DIR}/ios/platform/GameControllerController.h
 +	)
++	set_source_files_properties(${CMAKE_SOURCE_DIR}/ios/platform/GameControllerProvider.mm
++		PROPERTIES COMPILE_OPTIONS "-fobjc-arc")
 +	target_link_libraries(CemuInput PUBLIC
 +		"-framework GameController"
 +		"-framework Foundation"

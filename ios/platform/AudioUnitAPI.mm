@@ -111,7 +111,7 @@ void AudioUnitAPI::FillOutput(void* outputBuffer, size_t byteCount)
 
 	const size_t copied = std::min(m_buffer.size(), byteCount);
 	memcpy(outputBuffer, m_buffer.data(), copied);
-	m_buffer.erase(m_buffer.begin(), std::next(m_buffer.begin(), (ptrdiff_t)copied));
+	m_buffer.erase(m_buffer.begin(), m_buffer.begin() + (ptrdiff_t)copied);
 	lock.unlock();
 
 	if (copied != byteCount)
