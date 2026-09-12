@@ -26,6 +26,8 @@
 @property (nonatomic, strong) NSTimer* telemetryTimer;
 @property (nonatomic) BOOL emulationStarted;
 @property (nonatomic) BOOL overlayVisible;
+@property (nonatomic) NSTimeInterval autostopSeconds;
+@property (nonatomic) NSInteger telemetryTicks;
 @end
 
 @implementation EmulatorViewController
@@ -51,6 +53,12 @@
 	[super viewDidLoad];
 	self.view.backgroundColor = UIColor.blackColor;
 	self.navigationController.navigationBarHidden = YES;
+
+	// Unattended test hook: `--autostop <seconds>` stops emulation after N seconds.
+	NSArray<NSString*>* arguments = NSProcessInfo.processInfo.arguments;
+	NSUInteger autostopIndex = [arguments indexOfObject:@"--autostop"];
+	if (autostopIndex != NSNotFound && autostopIndex + 1 < arguments.count)
+		self.autostopSeconds = arguments[autostopIndex + 1].doubleValue;
 
 	CAMetalLayer* layer = (CAMetalLayer*)self.view.layer;
 	layer.framebufferOnly = YES;
@@ -98,6 +106,8 @@
 {
 	[super viewDidAppear:animated];
 
+	UIApplication.sharedApplication.idleTimerDisabled = YES;
+
 	CemuIOS* cemu = [CemuIOS sharedInstance];
 	[cemu setWindowSurface:self.view];
 	[self updateDrawableSize];
@@ -110,6 +120,7 @@
 			NSError* error = nil;
 			if (![cemu loadGameAtPath:weakSelf.gameURL.path error:&error])
 			{
+				NSLog(@"[ZephyrU] loadGameAtPath failed: %@", error.localizedDescription);
 				dispatch_async(dispatch_get_main_queue(), ^{
 					UIAlertController* alert = [UIAlertController alertControllerWithTitle:@"Cannot start game"
 					                                                              message:error.localizedDescription
@@ -122,6 +133,17 @@
 				return;
 			}
 			[cemu startEmulation];
+			NSLog(@"[ZephyrU] emulation started");
+
+			if (weakSelf.autostopSeconds > 0)
+			{
+				dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(weakSelf.autostopSeconds * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+					[weakSelf updateTelemetry];
+					[[CemuIOS sharedInstance] logTelemetry];
+					NSLog(@"[ZephyrU] autostop after %.0f seconds", weakSelf.autostopSeconds);
+					[weakSelf stopEmulation];
+				});
+			}
 		});
 	}
 
@@ -133,6 +155,7 @@
 - (void)viewWillDisappear:(BOOL)animated
 {
 	[super viewWillDisappear:animated];
+	UIApplication.sharedApplication.idleTimerDisabled = NO;
 	[self.telemetryTimer invalidate];
 	self.telemetryTimer = nil;
 	self.navigationController.navigationBarHidden = NO;
@@ -178,6 +201,10 @@
 	}
 	lastFrameCounter = frameCounter;
 	lastSampleTime = now;
+
+	// One telemetry line to log.txt every ~4 seconds for unattended runs.
+	if (++self.telemetryTicks % 8 == 0)
+		[[CemuIOS sharedInstance] logTelemetry];
 
 	self.telemetryLabel.text = [NSString stringWithFormat:
 		@"Title: %@\n"

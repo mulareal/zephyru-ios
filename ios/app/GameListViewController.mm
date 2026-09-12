@@ -8,6 +8,8 @@
 @interface GameListViewController () <UIDocumentPickerDelegate>
 @property (nonatomic, strong) NSMutableArray<NSURL*>* gameURLs;
 @property (nonatomic, strong) UILabel* footerLabel;
+@property (nonatomic) BOOL autoStarted;
+@property (nonatomic) NSInteger autoStartRetries;
 @end
 
 @implementation GameListViewController
@@ -23,12 +25,37 @@
 	                                                                         action:@selector(importGame:)];
 	self.gameURLs = [NSMutableArray array];
 	[self refreshGames];
+	[self attemptAutoStart];
 }
 
 - (void)viewWillAppear:(BOOL)animated
 {
 	[super viewWillAppear:animated];
 	[self refreshGames];
+}
+
+// Unattended test hook: `--autostart` starts the first imported game once the core is ready.
+- (void)attemptAutoStart
+{
+	if (self.autoStarted || self.autoStartRetries > 240)
+		return;
+	if (![NSProcessInfo.processInfo.arguments containsObject:@"--autostart"])
+		return;
+	if (![CemuIOS sharedInstance].coreInitialized || self.gameURLs.count == 0)
+	{
+		self.autoStartRetries++;
+		dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.5 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+			[self refreshGames];
+			[self attemptAutoStart];
+		});
+		return;
+	}
+
+	self.autoStarted = YES;
+	NSLog(@"[ZephyrU] autostart: loading %@", self.gameURLs.firstObject.lastPathComponent);
+	NSIndexPath* indexPath = [NSIndexPath indexPathForRow:0 inSection:1];
+	[self.tableView selectRowAtIndexPath:indexPath animated:NO scrollPosition:UITableViewScrollPositionNone];
+	[self tableView:self.tableView didSelectRowAtIndexPath:indexPath];
 }
 
 - (NSURL*)gamesDirectory

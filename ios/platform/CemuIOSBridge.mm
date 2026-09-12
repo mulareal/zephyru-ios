@@ -423,4 +423,15 @@ namespace
 	};
 }
 
+- (void)logTelemetry
+{
+	performanceMonitor_t& monitor = performanceMonitor;
+	const uint32 frameCounter = monitor.cycle[monitor.cycleIndex].frameCounter;
+	const uint32 drawCalls = monitor.cycle[monitor.cycleIndex].drawCallCounter;
+	const bool running = CafeSystem::IsTitleRunning();
+	cemuLog_log(LogType::Force, "ZephyrU telemetry: running={} frameCounter={} drawCalls={} vs={} ps={} thermal={}",
+	            running ? 1 : 0, frameCounter, drawCalls, monitor.numCompiledVS, monitor.numCompiledPS,
+	            (int)NSProcessInfo.processInfo.thermalState);
+}
+
 @end
