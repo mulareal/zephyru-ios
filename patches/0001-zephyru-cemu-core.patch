@@ -104,6 +104,76 @@ index b509e72..3cb5acf 100644
  if(CEMU_ARCHITECTURE MATCHES "(aarch64)|(AARCH64)|(arm64)|(ARM64)")
    target_sources(CemuCafe PRIVATE
      HW/Espresso/Recompiler/BackendAArch64/BackendAArch64.cpp
+diff --git a/src/Cafe/CafeSystem.cpp b/src/Cafe/CafeSystem.cpp
+index 6e6504a..95b5442 100644
+--- a/src/Cafe/CafeSystem.cpp
++++ b/src/Cafe/CafeSystem.cpp
+@@ -69,7 +69,7 @@
+ 
+ #if BOOST_OS_LINUX
+ #include <sys/sysinfo.h>
+-#elif BOOST_OS_MACOS || BOOST_OS_BSD
++#elif BOOST_OS_MACOS || BOOST_OS_BSD || defined(CEMU_IOS)
+ #include <sys/types.h>
+ #include <sys/sysctl.h>
+ #endif
+@@ -480,7 +480,7 @@ namespace CafeSystem
+ 		struct sysinfo info {};
+ 		sysinfo(&info);
+ 		cemuLog_log(LogType::Force, "RAM: {}MB", ((static_cast<uint64_t>(info.totalram) * info.mem_unit) / 1024LL / 1024LL));
+-		#elif BOOST_OS_MACOS
++		#elif BOOST_OS_MACOS || defined(CEMU_IOS)
+ 		int64_t totalRam;
+ 		size_t size = sizeof(totalRam);
+ 		int result = sysctlbyname("hw.memsize", &totalRam, &size, NULL, 0);
+@@ -560,7 +560,7 @@ namespace CafeSystem
+ 		}
+ 		else
+ 			platform = "Linux";
+-		#elif BOOST_OS_MACOS
++		#elif BOOST_OS_MACOS || defined(CEMU_IOS)
+ 		char productVersion[256]{};
+ 		size_t productVersionSize = sizeof(productVersion);
+ 		const int productVersionResult = sysctlbyname("kern.osproductversion", productVersion, &productVersionSize, nullptr, 0);
+diff --git a/src/Cafe/HW/Latte/LatteAddrLib/LatteAddrLib_Coord.cpp b/src/Cafe/HW/Latte/LatteAddrLib/LatteAddrLib_Coord.cpp
+index 26da5ec..e3c6a56 100644
+--- a/src/Cafe/HW/Latte/LatteAddrLib/LatteAddrLib_Coord.cpp
++++ b/src/Cafe/HW/Latte/LatteAddrLib/LatteAddrLib_Coord.cpp
+@@ -7,7 +7,7 @@ using namespace Latte;
+ namespace LatteAddrLib
+ {
+ 
+-#if BOOST_OS_LINUX || BOOST_OS_MACOS || BOOST_OS_BSD
++#if BOOST_OS_LINUX || BOOST_OS_MACOS || BOOST_OS_BSD || defined(CEMU_IOS)
+ 	unsigned char _BitScanReverse(uint32* _Index, uint32 _Mask)
+ 	{
+ 		if (!_Mask)
+diff --git a/src/Cafe/HW/MMU/MMU.h b/src/Cafe/HW/MMU/MMU.h
+index 6e3bee7..673f898 100644
+--- a/src/Cafe/HW/MMU/MMU.h
++++ b/src/Cafe/HW/MMU/MMU.h
+@@ -180,7 +180,7 @@ bool memory_isAddressRangeAccessible(MPTR virtualAddress, uint32 size);
+ #define CPU_swapEndianU64(_v) bswap_64((uint64)(_v))
+ #define CPU_swapEndianU32(_v) bswap_32((uint32)(_v))
+ #define CPU_swapEndianU16(_v) bswap_16((uint16)(_v))
+-#elif BOOST_OS_MACOS
++#elif BOOST_OS_MACOS || defined(CEMU_IOS)
+ #define CPU_swapEndianU64(_v) OSSwapInt64((uint64)(_v))
+ #define CPU_swapEndianU32(_v) OSSwapInt32((uint32)(_v))
+ #define CPU_swapEndianU16(_v) OSSwapInt16((uint16)(_v))
+diff --git a/src/Cafe/OS/libs/coreinit/coreinit_MCP.cpp b/src/Cafe/OS/libs/coreinit/coreinit_MCP.cpp
+index afbe0bf..7b86da4 100644
+--- a/src/Cafe/OS/libs/coreinit/coreinit_MCP.cpp
++++ b/src/Cafe/OS/libs/coreinit/coreinit_MCP.cpp
+@@ -476,7 +476,7 @@ typedef struct
+ 
+ static_assert(sizeof(UCParamStruct_t) == 0x54); // unsure
+ 
+-#if BOOST_OS_LINUX || BOOST_OS_MACOS || BOOST_OS_BSD
++#if BOOST_OS_LINUX || BOOST_OS_MACOS || BOOST_OS_BSD || defined(CEMU_IOS)
+ #define _strcmpi strcasecmp
+ #endif
+ 
 diff --git a/src/Common/cpu_features.cpp b/src/Common/cpu_features.cpp
 index cbc90a1..1131562 100644
 --- a/src/Common/cpu_features.cpp
@@ -125,6 +195,59 @@ index cbc90a1..1131562 100644
  	std::string cpuName;
  	size_t size = 0;
  
+diff --git a/src/Common/platform.h b/src/Common/platform.h
+index 08462a9..8a1474e 100644
+--- a/src/Common/platform.h
++++ b/src/Common/platform.h
+@@ -15,7 +15,7 @@
+ #include <X11/extensions/Xrender.h>
+ #include <X11/Xutil.h>
+ #include "Common/unix/platform.h"
+-#elif BOOST_OS_MACOS
++#elif BOOST_OS_MACOS || defined(CEMU_IOS)
+ #include <libkern/OSByteOrder.h>
+ #include "Common/unix/platform.h"
+ #endif
+diff --git a/src/Common/precompiled.h b/src/Common/precompiled.h
+index e037395..6f80d84 100644
+--- a/src/Common/precompiled.h
++++ b/src/Common/precompiled.h
+@@ -182,7 +182,7 @@ inline sint16 _swapEndianS16(sint16 v)
+ #else
+ inline uint64 _swapEndianU64(uint64 v)
+ {
+-#if BOOST_OS_MACOS
++#if BOOST_OS_MACOS || defined(CEMU_IOS)
+     return OSSwapInt64(v);
+ #elif BOOST_OS_BSD
+ #ifdef __OpenBSD__
+@@ -197,7 +197,7 @@ inline uint64 _swapEndianU64(uint64 v)
+ 
+ inline uint32 _swapEndianU32(uint32 v)
+ {
+-#if BOOST_OS_MACOS
++#if BOOST_OS_MACOS || defined(CEMU_IOS)
+     return OSSwapInt32(v);
+ #elif BOOST_OS_BSD
+ #ifdef __OpenBSD__
+@@ -212,7 +212,7 @@ inline uint32 _swapEndianU32(uint32 v)
+ 
+ inline sint32 _swapEndianS32(sint32 v)
+ {
+-#if BOOST_OS_MACOS
++#if BOOST_OS_MACOS || defined(CEMU_IOS)
+     return (sint32)OSSwapInt32((uint32)v);
+ #elif BOOST_OS_BSD
+ #ifdef __OpenBSD__
+@@ -508,7 +508,7 @@ bool match_any_of(T1&& value, Types&&... others)
+ 	clock_gettime(CLOCK_MONOTONIC_RAW, &tp);
+ 	return std::chrono::steady_clock::time_point(
+ 		std::chrono::seconds(tp.tv_sec) + std::chrono::nanoseconds(tp.tv_nsec));
+-#elif BOOST_OS_MACOS
++#elif BOOST_OS_MACOS || defined(CEMU_IOS)
+ 	return std::chrono::steady_clock::time_point(
+ 		std::chrono::nanoseconds(clock_gettime_nsec_np(CLOCK_MONOTONIC_RAW)));
+ #elif BOOST_OS_BSD
 diff --git a/src/Common/unix/platform.cpp b/src/Common/unix/platform.cpp
 index 879ae4d..5ca352c 100644
 --- a/src/Common/unix/platform.cpp
@@ -227,11 +350,24 @@ index 34df421..f71e902 100644
  
  		AudioAPIEnd,
  	};
+diff --git a/src/config/CemuConfig.h b/src/config/CemuConfig.h
+index 48c396f..2735cdc 100644
+--- a/src/config/CemuConfig.h
++++ b/src/config/CemuConfig.h
+@@ -410,7 +410,7 @@ struct CemuConfig
+ 	ConfigValue<std::string> proxy_server{};
+ 
+ 	// temporary workaround because feature crashes on macOS
+-#if BOOST_OS_MACOS
++#if BOOST_OS_MACOS || defined(CEMU_IOS)
+ #define DISABLE_SCREENSAVER_DEFAULT false
+ #else
+ #define DISABLE_SCREENSAVER_DEFAULT true
 diff --git a/src/input/CMakeLists.txt b/src/input/CMakeLists.txt
-index 4978ef0..cc876f3 100644
+index 4978ef0..7d1468d 100644
 --- a/src/input/CMakeLists.txt
 +++ b/src/input/CMakeLists.txt
-@@ -98,6 +98,19 @@ if(ENABLE_SDL)
+@@ -98,6 +98,20 @@ if(ENABLE_SDL)
  	target_link_libraries(CemuInput PRIVATE	SDL3::SDL3)
  endif()
  
@@ -239,8 +375,9 @@ index 4978ef0..cc876f3 100644
 +	# GameController.framework provider lives in the iOS platform directory
 +	target_include_directories(CemuInput PRIVATE "${CMAKE_SOURCE_DIR}")
 +	target_sources(CemuInput PRIVATE
-+		../ios/platform/GameControllerProvider.cpp
-+		../ios/platform/GameControllerProvider.h
++		${CMAKE_SOURCE_DIR}/ios/platform/GameControllerProvider.cpp
++		${CMAKE_SOURCE_DIR}/ios/platform/GameControllerProvider.h
++		${CMAKE_SOURCE_DIR}/ios/platform/GameControllerController.h
 +	)
 +	target_link_libraries(CemuInput PUBLIC
 +		"-framework GameController"
@@ -321,6 +458,19 @@ index b510474..9213a73 100644
  #include "input/api/Keyboard/KeyboardControllerProvider.h"
  #include "input/api/DSU/DSUControllerProvider.h"
  #include "input/api/GameCube/GameCubeControllerProvider.h"
+diff --git a/src/input/api/DSU/DSUControllerProvider.cpp b/src/input/api/DSU/DSUControllerProvider.cpp
+index a94aaae..81661c5 100644
+--- a/src/input/api/DSU/DSUControllerProvider.cpp
++++ b/src/input/api/DSU/DSUControllerProvider.cpp
+@@ -4,7 +4,7 @@
+ #if BOOST_OS_WINDOWS
+ #include <boost/asio/detail/socket_option.hpp>
+ #include <winsock2.h>
+-#elif BOOST_OS_LINUX || BOOST_OS_MACOS
++#elif BOOST_OS_LINUX || BOOST_OS_MACOS || defined(CEMU_IOS)
+ #include <sys/time.h>
+ #include <sys/socket.h>
+ #endif
 diff --git a/src/input/api/InputAPI.h b/src/input/api/InputAPI.h
 index a5f1f92..c30c5c1 100644
 --- a/src/input/api/InputAPI.h
@@ -444,7 +594,7 @@ index a791c5f..9ae51bf 100644
  	case InputAPI::SDLController: {
  		const auto sdl_controller = std::static_pointer_cast<SDLController>(controller);
 diff --git a/src/util/CMakeLists.txt b/src/util/CMakeLists.txt
-index be10d40..2300a14 100644
+index be10d40..b0e2d5b 100644
 --- a/src/util/CMakeLists.txt
 +++ b/src/util/CMakeLists.txt
 @@ -75,7 +75,24 @@ if(WIN32)
@@ -455,11 +605,11 @@ index be10d40..2300a14 100644
 +	if(CEMU_IOS)
 +		# iOS stubs out POSIX ucontext; use the vendored libucontext backend
 +		target_sources(CemuUtil PRIVATE
-+			../ios/platform/FiberIOS.cpp
-+			../ios/third_party/libucontext/arch/aarch64/getcontext.S
-+			../ios/third_party/libucontext/arch/aarch64/setcontext.S
-+			../ios/third_party/libucontext/arch/aarch64/swapcontext.S
-+			../ios/third_party/libucontext/arch/aarch64/trampoline.c
++			${CMAKE_SOURCE_DIR}/ios/platform/FiberIOS.cpp
++			${CMAKE_SOURCE_DIR}/ios/third_party/libucontext/arch/aarch64/getcontext.S
++			${CMAKE_SOURCE_DIR}/ios/third_party/libucontext/arch/aarch64/setcontext.S
++			${CMAKE_SOURCE_DIR}/ios/third_party/libucontext/arch/aarch64/swapcontext.S
++			${CMAKE_SOURCE_DIR}/ios/third_party/libucontext/arch/aarch64/trampoline.c
 +		)
 +		target_include_directories(CemuUtil PRIVATE
 +			"${CMAKE_SOURCE_DIR}/ios/third_party/libucontext/include"
@@ -473,3 +623,38 @@ index be10d40..2300a14 100644
  	target_sources(CemuUtil PRIVATE MemMapper/MemMapperUnix.cpp)
  	target_sources(CemuUtil PRIVATE SystemInfo/SystemInfoUnix.cpp)
  	if(NOT APPLE)
+diff --git a/src/util/helpers/helpers.cpp b/src/util/helpers/helpers.cpp
+index d13a31a..37368c3 100644
+--- a/src/util/helpers/helpers.cpp
++++ b/src/util/helpers/helpers.cpp
+@@ -143,7 +143,7 @@ void SetThreadName(const char* name)
+ 	}
+ #pragma warning(pop)
+ #endif
+-#elif BOOST_OS_MACOS
++#elif BOOST_OS_MACOS || defined(CEMU_IOS)
+ 	pthread_setname_np(name);
+ #else
+ 	if(std::strlen(name) > 15)
+diff --git a/src/util/highresolutiontimer/HighResolutionTimer.cpp b/src/util/highresolutiontimer/HighResolutionTimer.cpp
+index 48a7ad1..74bc72d 100644
+--- a/src/util/highresolutiontimer/HighResolutionTimer.cpp
++++ b/src/util/highresolutiontimer/HighResolutionTimer.cpp
+@@ -12,7 +12,7 @@ HighResolutionTimer HighResolutionTimer::now()
+     clock_gettime(CLOCK_MONOTONIC_RAW, &pc);
+     uint64 nsec = (uint64)pc.tv_sec * (uint64)1000000000 + (uint64)pc.tv_nsec;
+     return HighResolutionTimer(nsec);
+-#elif BOOST_OS_MACOS
++#elif BOOST_OS_MACOS || defined(CEMU_IOS)
+ 	return HighResolutionTimer(clock_gettime_nsec_np(CLOCK_MONOTONIC_RAW));
+ #elif BOOST_OS_BSD
+     timespec pc;
+@@ -32,7 +32,7 @@ uint64 HighResolutionTimer::m_freq = []() -> uint64 {
+ 	LARGE_INTEGER freq;
+ 	QueryPerformanceFrequency(&freq);
+ 	return (uint64)(freq.QuadPart);
+-#elif BOOST_OS_MACOS
++#elif BOOST_OS_MACOS || defined(CEMU_IOS)
+ 	return 1000000000;
+ #elif BOOST_OS_BSD
+ 	timespec pc;
