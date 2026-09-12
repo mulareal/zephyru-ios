@@ -53,6 +53,6 @@ private:
 	::AudioUnit m_audioUnit = nullptr;
 	bool m_isPlaying = false;
 
-	mutable std::mutex m_mutex;
+	mutable std::shared_mutex m_mutex;
 	std::vector<uint8> m_buffer;
 };
