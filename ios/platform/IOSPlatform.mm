@@ -29,29 +29,53 @@ namespace
 	std::atomic_int s_jitState{-1}; // -1 = unknown, 0 = unavailable, 1 = available
 	std::string s_jitDescription;
 
-	bool ProbeExecutableMemory()
+	bool RegionHasExecutePermission(void* mapping)
 	{
-		const size_t pageSize = (size_t)getpagesize();
-		void* mapping = mmap(nullptr, pageSize * 4, PROT_READ | PROT_WRITE | PROT_EXEC,
-		                     MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
-		if (mapping == MAP_FAILED)
-		{
-			s_jitDescription = "mmap(PROT_EXEC) failed: executable memory is not permitted for this process (no JIT entitlement / not debugged)";
-			return false;
-		}
-
-		bool executable = false;
 		vm_address_t address = (vm_address_t)(uintptr_t)mapping;
 		vm_size_t regionSize = 0;
 		vm_region_basic_info_data_64_t info{};
 		mach_msg_type_number_t infoCount = VM_REGION_BASIC_INFO_COUNT_64;
 		mach_port_t objectName = MACH_PORT_NULL;
-		kern_return_t kr = vm_region_64(mach_task_self(), &address, &regionSize, VM_REGION_BASIC_INFO_64,
-		                                (vm_region_info_t)&info, &infoCount, &objectName);
-		if (kr == KERN_SUCCESS)
-			executable = (info.protection & VM_PROT_EXECUTE) != 0;
+		const kern_return_t kr = vm_region_64(mach_task_self(), &address, &regionSize, VM_REGION_BASIC_INFO_64,
+		                                      (vm_region_info_t)&info, &infoCount, &objectName);
+		return kr == KERN_SUCCESS && (info.protection & VM_PROT_EXECUTE) != 0;
+	}
 
-		munmap(mapping, pageSize * 4);
+	bool ProbeExecutableMemory()
+	{
+		const size_t pageSize = (size_t)getpagesize();
+		const size_t mapSize = pageSize * 4;
+
+		// Realistic path first: xbyak (and therefore Cemu's recompiler) maps read/write
+		// and then flips the pages to executable via mprotect. With a debugger attached
+		// (CS_DEBUGGED) that succeeds even though a direct PROT_EXEC mapping is stripped.
+		{
+			void* mapping = mmap(nullptr, mapSize, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+			if (mapping != MAP_FAILED)
+			{
+				const bool protectOk = mprotect(mapping, mapSize, PROT_READ | PROT_EXEC) == 0;
+				const bool executable = protectOk && RegionHasExecutePermission(mapping);
+				munmap(mapping, mapSize);
+				if (executable)
+				{
+					s_jitDescription = "Executable memory available via mprotect (JIT enabled, debugger attached)";
+					return true;
+				}
+			}
+		}
+
+		// Fallback: direct PROT_EXEC mapping (Apple dynamic-codesigning / allow-jit).
+		void* mapping = mmap(nullptr, mapSize, PROT_READ | PROT_WRITE | PROT_EXEC,
+		                     MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+		if (mapping == MAP_FAILED)
+		{
+			s_jitDescription = "mmap/mprotect could not create executable memory. Attach a debugger "
+			                   "(StikDebug-class) to a development-signed build to enable the AArch64 recompiler.";
+			return false;
+		}
+
+		const bool executable = RegionHasExecutePermission(mapping);
+		munmap(mapping, mapSize);
 
 		if (executable)
 		{
@@ -59,7 +83,7 @@ namespace
 			return true;
 		}
 
-		s_jitDescription = "mmap(PROT_EXEC) succeeded but the kernel stripped execute permission "
+		s_jitDescription = "Executable memory was created but the kernel stripped execute permission "
 		                   "(iOS JIT restriction). Enable JIT with a development-signed build attached to a debugger "
 		                   "(StikDebug/Jitterbug-style) to use the AArch64 recompiler.";
 		return false;
