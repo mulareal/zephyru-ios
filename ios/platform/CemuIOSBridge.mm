@@ -328,10 +328,10 @@ namespace
 		return YES;
 	}
 
-	// disk image / installed title: scan its directory and locate the title by path
-	const fs::path scanDir = gamePath.parent_path();
-	CafeTitleList::AddScanPath(scanDir);
-	CafeTitleList::Refresh();
+	// Disk image: parse this specific file synchronously. CafeTitleList::Refresh() scans
+	// asynchronously, so a freshly imported title would not be in the list yet. Comparing
+	// with fs::equivalent also covers /var vs /private/var path differences.
+	CafeTitleList::AddTitleFromPath(gamePath);
 
 	TitleId matchedTitleId = 0;
 	for (TitleId titleId : CafeTitleList::GetAllTitleIds())
@@ -339,7 +339,8 @@ namespace
 		TitleInfo titleInfo;
 		if (!CafeTitleList::GetFirstByTitleId(titleId, titleInfo))
 			continue;
-		if (titleInfo.GetPath() == gamePath)
+		std::error_code equivalentEc;
+		if (fs::equivalent(titleInfo.GetPath(), gamePath, equivalentEc))
 		{
 			matchedTitleId = titleId;
 			break;
@@ -348,10 +349,12 @@ namespace
 
 	if (matchedTitleId == 0)
 	{
+		cemuLog_log(LogType::Force, "ZephyrU: no title matched '{}' ({} known titles)", _pathToUtf8(gamePath), CafeTitleList::GetAllTitleIds().size());
 		if (error)
 			*error = MakeError(@"Cemu could not identify this title. Use a decrypted .wua image or a standalone .rpx.");
 		return NO;
 	}
+	cemuLog_log(LogType::Force, "ZephyrU: loading title {:016x} from '{}'", (uint64)matchedTitleId, _pathToUtf8(gamePath));
 
 	const auto status = CafeSystem::PrepareForegroundTitle(matchedTitleId);
 	if (status != CafeSystem::PREPARE_STATUS_CODE::SUCCESS)
