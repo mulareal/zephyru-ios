@@ -137,6 +137,18 @@ index 6e6504a..95b5442 100644
  		char productVersion[256]{};
  		size_t productVersionSize = sizeof(productVersion);
  		const int productVersionResult = sysctlbyname("kern.osproductversion", productVersion, &productVersionSize, nullptr, 0);
+diff --git a/src/Cafe/HW/Latte/Core/LatteShader.cpp b/src/Cafe/HW/Latte/Core/LatteShader.cpp
+index 3041f63..b465fa8 100644
+--- a/src/Cafe/HW/Latte/Core/LatteShader.cpp
++++ b/src/Cafe/HW/Latte/Core/LatteShader.cpp
+@@ -15,6 +15,7 @@
+ #include "config/ActiveSettings.h"
+ #include "Cafe/GameProfile/GameProfile.h"
+ #include "util/containers/flat_hash_map.hpp"
++#include "util/containers/robin_hood.h"
+ #include "util/helpers/StateHasher.h"
+ #ifdef ENABLE_METAL
+ #include "Cafe/HW/Latte/Renderer/Metal/LatteToMtl.h"
 diff --git a/src/Cafe/HW/Latte/LatteAddrLib/LatteAddrLib_Coord.cpp b/src/Cafe/HW/Latte/LatteAddrLib/LatteAddrLib_Coord.cpp
 index 26da5ec..e3c6a56 100644
 --- a/src/Cafe/HW/Latte/LatteAddrLib/LatteAddrLib_Coord.cpp
