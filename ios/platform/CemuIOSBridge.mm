@@ -34,6 +34,9 @@
 NSNotificationName const ZephyrUGameLoadedNotification = @"ZephyrUGameLoaded";
 NSNotificationName const ZephyrUGameExitedNotification = @"ZephyrUGameExited";
 
+// Defined by the desktop executable in src/main.cpp, which is not built on iOS.
+std::atomic_bool g_isGPUInitFinished = false;
+
 namespace
 {
 	bool s_coreInitialized = false;

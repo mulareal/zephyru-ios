@@ -108,7 +108,9 @@ target_link_libraries(ZephyrU PRIVATE
 	CemuInput
 	CemuAudio
 	CemuGui
+	CemuUtil
 	imguiImpl
+	"-framework UniformTypeIdentifiers"
 )
 
 # Bundle Cemu's runtime data (game profiles, graphic packs, resources) so the
