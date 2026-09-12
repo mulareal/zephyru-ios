@@ -1,5 +1,5 @@
 diff --git a/CMakeLists.txt b/CMakeLists.txt
-index 644032c..43bceac 100644
+index 644032c..f2aede8 100644
 --- a/CMakeLists.txt
 +++ b/CMakeLists.txt
 @@ -4,6 +4,28 @@ option(ENABLE_VCPKG "Enable the vcpkg package manager" ON)
@@ -31,7 +31,23 @@ index 644032c..43bceac 100644
  # used by CI script to set version:
  set(EMULATOR_VERSION_MAJOR "0" CACHE STRING "")
  set(EMULATOR_VERSION_MINOR "0" CACHE STRING "")
-@@ -99,7 +121,12 @@ endif()
+@@ -76,6 +98,15 @@ set_property(GLOBAL PROPERTY USE_FOLDERS ON)
+ set(CMAKE_INTERPROCEDURAL_OPTIMIZATION_RELEASE ON)
+ set(CMAKE_INTERPROCEDURAL_OPTIMIZATION_RELWITHDEBINFO ON)
+ 
++if (CEMU_IOS)
++	# ThinLTO internalizes vague-linkage symbols (inline variables, function-local
++	# statics of inline functions) of the overlay and core static libraries separately,
++	# duplicating e.g. ActiveSettings::s_config_path and GetConfigHandle()::config.
++	# Disable LTO on iOS so Mach-O weak-symbol coalescing merges them into one copy.
++	set(CMAKE_INTERPROCEDURAL_OPTIMIZATION_RELEASE OFF)
++	set(CMAKE_INTERPROCEDURAL_OPTIMIZATION_RELWITHDEBINFO OFF)
++endif()
++
+ if (MSVC)
+ 	set_property(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT CemuBin)
+ 	# floating point model: precise, fiber safe optimizations
+@@ -99,7 +130,12 @@ endif()
  
  if (APPLE)
      enable_language(OBJC OBJCXX)
@@ -45,7 +61,7 @@ index 644032c..43bceac 100644
  endif()
  
  if (UNIX AND NOT APPLE)
-@@ -269,3 +296,7 @@ if (NOT ZArchive_FOUND)
+@@ -269,3 +305,7 @@ if (NOT ZArchive_FOUND)
  endif()
  
  add_subdirectory(src)
