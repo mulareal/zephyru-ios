@@ -56,7 +56,7 @@ namespace WindowSystem
 	{
 		std::string msg(message);
 		std::string ttl(title);
-		IOSPlatform_PresentError(ttl, msg, (int)(errorCategory ? *errorCategory : ErrorCategory::KEYS_TXT_CREATION));
+		IOSPlatform_PresentError(ttl.c_str(), msg.c_str(), (int)(errorCategory ? *errorCategory : ErrorCategory::KEYS_TXT_CREATION));
 	}
 
 	void Create()
