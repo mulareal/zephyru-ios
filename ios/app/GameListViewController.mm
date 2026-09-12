@@ -147,4 +147,30 @@
 	[self.navigationController pushViewController:emulator animated:YES];
 }
 
+- (BOOL)tableView:(UITableView*)tableView canEditRowAtIndexPath:(NSIndexPath*)indexPath
+{
+	return indexPath.section == 1;
+}
+
+- (void)tableView:(UITableView*)tableView commitEditingStyle:(UITableViewCellEditingStyle)editingStyle forRowAtIndexPath:(NSIndexPath*)indexPath
+{
+	if (editingStyle != UITableViewCellEditingStyleDelete || indexPath.section != 1)
+		return;
+
+	NSURL* url = self.gameURLs[(NSUInteger)indexPath.row];
+	NSError* error = nil;
+	if (![NSFileManager.defaultManager removeItemAtURL:url error:&error])
+	{
+		UIAlertController* alert = [UIAlertController alertControllerWithTitle:@"Delete failed"
+		                                                              message:error.localizedDescription
+		                                                       preferredStyle:UIAlertControllerStyleAlert];
+		[alert addAction:[UIAlertAction actionWithTitle:@"OK" style:UIAlertActionStyleDefault handler:nil]];
+		[self presentViewController:alert animated:YES completion:nil];
+		return;
+	}
+
+	[self.gameURLs removeObjectAtIndex:(NSUInteger)indexPath.row];
+	[tableView deleteRowsAtIndexPaths:@[ indexPath ] withRowAnimation:UITableViewRowAnimationAutomatic];
+}
+
 @end
