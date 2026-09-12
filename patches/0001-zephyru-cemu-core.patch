@@ -674,10 +674,10 @@ index a791c5f..9ae51bf 100644
  	case InputAPI::SDLController: {
  		const auto sdl_controller = std::static_pointer_cast<SDLController>(controller);
 diff --git a/src/util/CMakeLists.txt b/src/util/CMakeLists.txt
-index be10d40..b0e2d5b 100644
+index be10d40..99de8e3 100644
 --- a/src/util/CMakeLists.txt
 +++ b/src/util/CMakeLists.txt
-@@ -75,7 +75,24 @@ if(WIN32)
+@@ -75,7 +75,29 @@ if(WIN32)
  	target_sources(CemuUtil PRIVATE MemMapper/MemMapperWin.cpp)
  	target_sources(CemuUtil PRIVATE SystemInfo/SystemInfoWin.cpp)
  elseif(UNIX)
@@ -696,6 +696,11 @@ index be10d40..b0e2d5b 100644
 +			"${CMAKE_SOURCE_DIR}/ios/third_party/libucontext/arch/aarch64/include"
 +			"${CMAKE_SOURCE_DIR}/ios/third_party/libucontext/arch/aarch64"
 +			"${CMAKE_SOURCE_DIR}/ios/third_party/libucontext/arch/common"
++		)
++		# libucontext's trampoline is C; the C++ precompiled header cannot apply
++		set_source_files_properties(
++			${CMAKE_SOURCE_DIR}/ios/third_party/libucontext/arch/aarch64/trampoline.c
++			PROPERTIES SKIP_PRECOMPILE_HEADERS ON
 +		)
 +	else()
 +		target_sources(CemuUtil PRIVATE Fiber/FiberUnix.cpp)
