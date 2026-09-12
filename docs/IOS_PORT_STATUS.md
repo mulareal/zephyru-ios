@@ -166,6 +166,8 @@ Support directory.
 - First imported title (`.wux`) fails to parse with `invalid reason 3` (`NO_DISC_KEY`): the image is
   encrypted. ZephyrU copies a user-supplied `Documents/keys.txt` into the user data path, where
   Cemu's `KeyCache` reads it; no keys are ever bundled. A decrypted `.wua`/`.rpx` avoids this.
+  The import chain (Files-app `Documents/keys.txt` → user data, on every start) was verified on
+  device with a test file; the user just has to edit that file and restart the app.
 - `-[EmulatorViewController viewDidLoad]` used to crash because the `layerClass` override sat on
   the view controller instead of a `UIView`; the emulator view is now an `EmulatorMetalView`.
 - Unattended test hooks: `--autostart` starts the first imported game, `--autostop <seconds>`
