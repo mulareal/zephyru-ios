@@ -55,7 +55,7 @@ jobs:
         run: cp scripts/ios-vcpkg.json cemu/vcpkg.json
 
       - name: Restore vcpkg binary cache
-        uses: actions/cache@v4
+        uses: actions/cache/restore@v4
         with:
           path: ${{ github.workspace }}/vcpkg-bincache
           key: vcpkg-bincache-${{ runner.os }}-${{ hashFiles('scripts/ios-vcpkg.json') }}-${{ env.CEMU_SHA }}
@@ -94,3 +94,12 @@ jobs:
             build.log
           if-no-files-found: ignore
           retention-days: 14
+
+      # Persist the vcpkg binary cache even when configure or build fails, so
+      # consecutive iterations do not rebuild all iOS dependencies.
+      - name: Save vcpkg binary cache
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: ${{ github.workspace }}/vcpkg-bincache
+          key: vcpkg-bincache-${{ runner.os }}-${{ hashFiles('scripts/ios-vcpkg.json') }}-${{ env.CEMU_SHA }}

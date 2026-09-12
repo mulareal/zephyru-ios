@@ -1,8 +1,8 @@
 diff --git a/CMakeLists.txt b/CMakeLists.txt
-index 644032c..a360761 100644
+index 644032c..783611b 100644
 --- a/CMakeLists.txt
 +++ b/CMakeLists.txt
-@@ -4,6 +4,22 @@ option(ENABLE_VCPKG "Enable the vcpkg package manager" ON)
+@@ -4,6 +4,26 @@ option(ENABLE_VCPKG "Enable the vcpkg package manager" ON)
  option(MACOS_BUNDLE "The executable when built on macOS will be created as an application bundle" OFF)
  option(ALLOW_PORTABLE "Allow Cemu to be run in portable mode" ON)
  
@@ -20,12 +20,16 @@ index 644032c..a360761 100644
 +	set(ENABLE_LIBUSB OFF CACHE BOOL "" FORCE)
 +	set(ENABLE_HIDAPI OFF CACHE BOOL "" FORCE)
 +	set(ENABLE_DISCORD_RPC OFF CACHE BOOL "" FORCE)
++	# On iOS all executables default to MACOSX_BUNDLE, which breaks the install()
++	# rules of third-party subprojects that do not set a BUNDLE DESTINATION
++	# (e.g. ZArchive's zarchiveTool). Our own app sets MACOSX_BUNDLE explicitly.
++	set(CMAKE_MACOSX_BUNDLE OFF)
 +endif()
 +
  # used by CI script to set version:
  set(EMULATOR_VERSION_MAJOR "0" CACHE STRING "")
  set(EMULATOR_VERSION_MINOR "0" CACHE STRING "")
-@@ -99,7 +115,12 @@ endif()
+@@ -99,7 +119,12 @@ endif()
  
  if (APPLE)
      enable_language(OBJC OBJCXX)
@@ -39,7 +43,7 @@ index 644032c..a360761 100644
  endif()
  
  if (UNIX AND NOT APPLE)
-@@ -269,3 +290,7 @@ if (NOT ZArchive_FOUND)
+@@ -269,3 +294,7 @@ if (NOT ZArchive_FOUND)
  endif()
  
  add_subdirectory(src)
