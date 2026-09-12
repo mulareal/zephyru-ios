@@ -1,0 +1,10 @@
+# Keep shell scripts and patch files strictly LF so they work when checked out
+# on the macOS CI runner.
+*.sh text eol=lf
+*.patch -text
+*.mm text eol=lf
+*.cpp text eol=lf
+*.h text eol=lf
+*.json text eol=lf
+*.yml text eol=lf
+Info.plist text eol=lf
