@@ -137,6 +137,33 @@ index 6e6504a..95b5442 100644
  		char productVersion[256]{};
  		size_t productVersionSize = sizeof(productVersion);
  		const int productVersionResult = sysctlbyname("kern.osproductversion", productVersion, &productVersionSize, nullptr, 0);
+diff --git a/src/Cafe/HW/Espresso/Recompiler/BackendAArch64/BackendAArch64.cpp b/src/Cafe/HW/Espresso/Recompiler/BackendAArch64/BackendAArch64.cpp
+index aba6f36..f1aea9f 100644
+--- a/src/Cafe/HW/Espresso/Recompiler/BackendAArch64/BackendAArch64.cpp
++++ b/src/Cafe/HW/Espresso/Recompiler/BackendAArch64/BackendAArch64.cpp
+@@ -1673,16 +1673,19 @@ void AArch64GenContext_t::leaveRecompilerCode()
+ }
+ 
+ bool initializedInterfaceFunctions = false;
+-AArch64GenContext_t enterRecompilerCode_ctx{};
+ 
+-AArch64GenContext_t leaveRecompilerCode_unvisited_ctx{};
+-AArch64GenContext_t leaveRecompilerCode_visited_ctx{};
+ void PPCRecompilerAArch64Gen_generateRecompilerInterfaceFunctions()
+ {
+ 	if (initializedInterfaceFunctions)
+ 		return;
+ 	initializedInterfaceFunctions = true;
+ 
++	// Construct lazily. As globals these CodeGenerators allocate executable memory during
++	// dyld static initialization, which aborts on iOS when JIT is unavailable (interpreter mode).
++	static AArch64GenContext_t enterRecompilerCode_ctx{};
++	static AArch64GenContext_t leaveRecompilerCode_unvisited_ctx{};
++	static AArch64GenContext_t leaveRecompilerCode_visited_ctx{};
++
+ 	enterRecompilerCode_ctx.enterRecompilerCode();
+ 	enterRecompilerCode_ctx.readyRE();
+ 	PPCRecompiler_enterRecompilerCode = enterRecompilerCode_ctx.getCode<decltype(PPCRecompiler_enterRecompilerCode)>();
 diff --git a/src/Cafe/HW/Latte/Core/LatteBufferData.cpp b/src/Cafe/HW/Latte/Core/LatteBufferData.cpp
 index 71b4a14..b121818 100644
 --- a/src/Cafe/HW/Latte/Core/LatteBufferData.cpp
