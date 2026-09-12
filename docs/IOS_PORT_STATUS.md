@@ -34,7 +34,8 @@ Legend: **DONE** implemented, **SCAFFOLDED** code written but not yet compiled o
 | `CemuCafe` core build for `arm64-apple-ios` | CI | long tail of desktop assumptions | iterate CI errors |
 | `CemuCommon` (unix platform, MemMapper) | CI | none known | CI |
 | PPC IML + AArch64 recompiler | SCAFFOLDED | executable memory (JIT) availability on iOS 26/TXM | validate codegen on device with JIT; interpreter fallback in place |
-| PPC interpreter fallback (`CPUMode::SinglecoreInterpreter`) | DONE (upstream) | performance unsuitable for full speed | measure once booting |
+| PPC interpreter fallback (`CPUMode::SinglecoreInterpreter`) | DONE (upstream) | performance unsuitable for full speed | auto-selected when the JIT probe fails |
+| Cooperative fiber scheduler (`util/Fiber`) | DONE (port) | none | `ios/platform/FiberIOS.cpp` + vendored ISC-licensed libucontext AArch64 backend; iOS stubs POSIX ucontext to ENOTSUP (see research §3.2) |
 | Metal renderer (GX2→Metal) | SCAFFOLDED | iOS surface integration | CI compile + device test |
 | Metal surface (`CreateMetalLayer` for UIView/CAMetalLayer) | SCAFFOLDED | none | CI compile |
 | `WindowSystem` iOS implementation | SCAFFOLDED | none | CI compile |
@@ -55,12 +56,16 @@ Legend: **DONE** implemented, **SCAFFOLDED** code written but not yet compiled o
 1. **iOS JIT policy (critical path for performance).** App Store/standard signing forbids
    executable memory; a development-signed app with `get-task-allow` attached to a debugger
    (StikDebug-class on iOS 26/TXM) is required for the AArch64 recompiler. Verified sources in
-   `docs/IOS_PORT_RESEARCH.md` §3.3/3.4. The app detects this at runtime and reports it; no
-   exploit is used.
-2. **First full iOS configure/build.** Long tail expected in: boost/unix platform code,
+   `docs/IOS_PORT_RESEARCH.md` §3.4/§3.5. The app detects this at runtime (real mmap+mach probe),
+   reports it in the UI, and automatically selects `CPUMode::SinglecoreInterpreter` when
+   executable memory is unavailable. No exploit is used.
+2. **iOS stubs POSIX ucontext.** Cemu's fiber scheduler would silently fail; replaced with the
+   vendored libucontext AArch64 implementation (`ios/third_party/libucontext`), the same approach
+   used by UTM/QEMU. See research §3.2.
+3. **First full iOS configure/build.** Long tail expected in: boost/unix platform code,
    `Common/unix/platform.cpp`, `ExceptionHandler_posix.cpp`, sockets (`nsysnet`), and
    `CafeSystem` thread naming. CI logs drive fixes; no subsystem is commented out.
-3. **vcpkg iOS dependency build time.** Mitigated with a binary cache in CI and an iOS-trimmed
+4. **vcpkg iOS dependency build time.** Mitigated with a binary cache in CI and an iOS-trimmed
    manifest (`scripts/ios-vcpkg.json`).
 
 ## Build evidence log

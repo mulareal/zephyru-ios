@@ -1,5 +1,5 @@
 diff --git a/CMakeLists.txt b/CMakeLists.txt
-index 644032c..aaeb815 100644
+index 644032c..a360761 100644
 --- a/CMakeLists.txt
 +++ b/CMakeLists.txt
 @@ -4,6 +4,22 @@ option(ENABLE_VCPKG "Enable the vcpkg package manager" ON)
@@ -25,18 +25,21 @@ index 644032c..aaeb815 100644
  # used by CI script to set version:
  set(EMULATOR_VERSION_MAJOR "0" CACHE STRING "")
  set(EMULATOR_VERSION_MINOR "0" CACHE STRING "")
-@@ -99,7 +115,9 @@ endif()
+@@ -99,7 +115,12 @@ endif()
  
  if (APPLE)
      enable_language(OBJC OBJCXX)
 -    set(CMAKE_OSX_DEPLOYMENT_TARGET "13.4")
++    if (CEMU_IOS)
++        enable_language(ASM)
++    endif()
 +    if (NOT CMAKE_OSX_DEPLOYMENT_TARGET)
 +        set(CMAKE_OSX_DEPLOYMENT_TARGET "13.4")
 +    endif()
  endif()
  
  if (UNIX AND NOT APPLE)
-@@ -269,3 +287,7 @@ if (NOT ZArchive_FOUND)
+@@ -269,3 +290,7 @@ if (NOT ZArchive_FOUND)
  endif()
  
  add_subdirectory(src)
@@ -436,3 +439,33 @@ index a791c5f..9ae51bf 100644
  #ifdef HAS_SDL
  	case InputAPI::SDLController: {
  		const auto sdl_controller = std::static_pointer_cast<SDLController>(controller);
+diff --git a/src/util/CMakeLists.txt b/src/util/CMakeLists.txt
+index be10d40..2300a14 100644
+--- a/src/util/CMakeLists.txt
++++ b/src/util/CMakeLists.txt
+@@ -75,7 +75,24 @@ if(WIN32)
+ 	target_sources(CemuUtil PRIVATE MemMapper/MemMapperWin.cpp)
+ 	target_sources(CemuUtil PRIVATE SystemInfo/SystemInfoWin.cpp)
+ elseif(UNIX)
+-	target_sources(CemuUtil PRIVATE Fiber/FiberUnix.cpp)
++	if(CEMU_IOS)
++		# iOS stubs out POSIX ucontext; use the vendored libucontext backend
++		target_sources(CemuUtil PRIVATE
++			../ios/platform/FiberIOS.cpp
++			../ios/third_party/libucontext/arch/aarch64/getcontext.S
++			../ios/third_party/libucontext/arch/aarch64/setcontext.S
++			../ios/third_party/libucontext/arch/aarch64/swapcontext.S
++			../ios/third_party/libucontext/arch/aarch64/trampoline.c
++		)
++		target_include_directories(CemuUtil PRIVATE
++			"${CMAKE_SOURCE_DIR}/ios/third_party/libucontext/include"
++			"${CMAKE_SOURCE_DIR}/ios/third_party/libucontext/arch/aarch64/include"
++			"${CMAKE_SOURCE_DIR}/ios/third_party/libucontext/arch/aarch64"
++			"${CMAKE_SOURCE_DIR}/ios/third_party/libucontext/arch/common"
++		)
++	else()
++		target_sources(CemuUtil PRIVATE Fiber/FiberUnix.cpp)
++	endif()
+ 	target_sources(CemuUtil PRIVATE MemMapper/MemMapperUnix.cpp)
+ 	target_sources(CemuUtil PRIVATE SystemInfo/SystemInfoUnix.cpp)
+ 	if(NOT APPLE)

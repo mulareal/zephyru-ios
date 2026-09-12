@@ -208,6 +208,12 @@ namespace
 		GetConfig().graphic_api = kMetal;
 		GetConfig().audio_api = IAudioAPI::AudioUnit;
 		GetConfig().mlc_path = mlcPath.generic_string();
+
+		// Without executable memory the AArch64 recompiler cannot run; select the
+		// interpreter so the core never attempts to generate code.
+		const bool jitAvailable = IOSPlatform_IsJITAvailable() != 0;
+		GetConfig().cpu_mode = jitAvailable ? CPUMode::MulticoreRecompiler : CPUMode::SinglecoreInterpreter;
+
 		GetConfigHandle().Save();
 
 		if (!CreateDirectoriesIfNotExist(ActiveSettings::GetConfigPath("controllerProfiles")) ||

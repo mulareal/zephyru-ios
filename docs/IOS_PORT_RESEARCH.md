@@ -107,8 +107,29 @@ Instruction cache maintenance for generated code is **UNVERIFIED** in this docum
 `__builtin___clear_cache`/`isb` call was found in the grepped emit path; this must be confirmed on device, because
 Apple's AArch64 requires explicit I-cache synchronization after writing code (Apple's JIT guidance). **Action item.**
 
-### 3.2 Interpreter fallback already exists
+### 3.2 Fibers: ucontext is stubbed on iOS (port-specific)
 
+Cemu's scheduler is built on cooperative fibers (`src/util/Fiber/FiberUnix.cpp`) implemented with POSIX
+`ucontext` (`getcontext`/`makecontext`/`swapcontext`). On iOS these functions are **not implemented**:
+Apple's Libc provides stubs returning `ENOTSUP`. The functions are declared in the SDK and link, but never
+switch context, so the emulator would deadlock or crash at runtime.
+
+Sources:
+- Porting reports: https://stackoverflow.com/questions/7470186/iphone-makecontext-swapcontext (Apple Libc
+  `context-stubs.c` returns ENOTSUP) and https://butenkoms.space/coroutines-on-ios/.
+- QEMU/UTM hit the same issue and added `libucontext` as an iOS-specific coroutine backend:
+  https://patchew.org/QEMU/20201012232939.48481-1-j@getutm.app/20201012232939.48481-7-j@getutm.app/
+  ("iOS does not support ucontext natively for aarch64 ... As a workaround we include a library
+  implementation of ucontext").
+
+Decision: vendor **libucontext** (ISC-style license, AArch64 assembly, already handles `__MACH__`
+underscore prefixing in `arch/common/common-defs.h`) under `ios/third_party/libucontext/`, and compile it
+into `CemuUtil` on iOS in place of `FiberUnix.cpp` via the new `ios/platform/FiberIOS.cpp`. One behavioral
+difference is intentional and documented in that file: libucontext reads `makecontext` varargs as 64-bit
+words, so the fiber entry parameter is passed as a single argument instead of Cemu's two-int split for
+Apple's macOS `makecontext` ABI.
+
+### 3.3 Interpreter fallback (JIT-less correctness path)
 - `CPUMode::SinglecoreInterpreter` short-circuits `PPCRecompiler_init()` before any executable-memory allocation
   (`PPCRecompiler.cpp:666-670`), logging "Using singlecore interpreter".
 - `LaunchSettings::ForceInterpreter()` / `ForceMultiCoreInterpreter()` (`src/config/LaunchSettings.h:37-38`) force
@@ -119,7 +140,7 @@ Apple's AArch64 requires explicit I-cache synchronization after writing code (Ap
   executable memory is available. This directly satisfies the "do not say JIT is unavailable and give up" requirement:
   both paths are upstream-supported; only the MemMapper and the JIT-enablement story are iOS-specific.
 
-### 3.3 Executable memory on iOS (primary sources)
+### 3.4 Executable memory on iOS (primary sources)
 
 - Apple Platform Security: W+X pages "can be used only by apps under tightly controlled conditions: the kernel checks
   for the presence of the Apple-only dynamic code-signing entitlement" — used by Safari's JIT.
@@ -136,7 +157,7 @@ Apple's AArch64 requires explicit I-cache synchronization after writing code (Ap
   https://ish.app/blog/ish-jit-and-eu ; Dolphin's request was denied too:
   https://oatmealdome.me/blog/why-dolphin-isnt-coming-to-the-app-store
 
-### 3.4 The sanctioned development mechanism (no exploits)
+### 3.5 The sanctioned development mechanism (no exploits)
 
 - Development-signed apps carry `get-task-allow`; attaching a debugger sets `CS_DEBUGGED`
   (`#define CS_DEBUGGED 0x10000000 /* ... allowed to run with invalid pages */` in xnu `bsd/sys/codesign.h`), and
@@ -155,7 +176,7 @@ Apple's AArch64 requires explicit I-cache synchronization after writing code (Ap
 - Therefore: **JIT availability on the target is an operational risk, not an architectural blocker.** The port ships
   both backends and detects availability at runtime.
 
-### 3.5 Decision (EVIDENCE → HYPOTHESIS → DECISION)
+### 3.6 Decision (EVIDENCE → HYPOTHESIS → DECISION)
 
 - Evidence: AArch64 recompiler exists upstream and is selected automatically for arm64; JIT requires `CS_DEBUGGED`
   (dev-signed + debugger) on iOS; interpreter fallback exists upstream.
