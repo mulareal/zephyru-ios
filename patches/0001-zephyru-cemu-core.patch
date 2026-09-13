@@ -312,6 +312,43 @@ index afbe0bf..7b86da4 100644
  #define _strcmpi strcasecmp
  #endif
  
+diff --git a/src/Common/ExceptionHandler/ExceptionHandler_posix.cpp b/src/Common/ExceptionHandler/ExceptionHandler_posix.cpp
+index 7afbf19..bec2384 100644
+--- a/src/Common/ExceptionHandler/ExceptionHandler_posix.cpp
++++ b/src/Common/ExceptionHandler/ExceptionHandler_posix.cpp
+@@ -13,6 +13,11 @@
+ #include "ELFSymbolTable.h"
+ #endif
+ 
++#if defined(CEMU_IOS)
++#include <mach-o/dyld.h>
++#include <ucontext.h>
++#endif
++
+ #if BOOST_OS_LINUX
+ void DemangleAndPrintBacktrace(char** backtrace, size_t size)
+ {
+@@ -88,6 +93,20 @@ void handlerDumpingSignal(int sig, siginfo_t *info, void *context)
+ 		printf("Unknown core dumping signal!\n");
+ 	}
+ 
++#if defined(CEMU_IOS)
++	// backtrace() is unreliable on fiber stacks; log the raw fault state so the
++	// faulting instruction can be symbolized against the app binary.
++	{
++		ucontext_t* uc = (ucontext_t*)context;
++		const uintptr_t pc = (uintptr_t)uc->uc_mcontext->__ss.__pc;
++		const uintptr_t lr = (uintptr_t)uc->uc_mcontext->__ss.__lr;
++		const uintptr_t fp = (uintptr_t)uc->uc_mcontext->__ss.__fp;
++		const uintptr_t sp = (uintptr_t)uc->uc_mcontext->__ss.__sp;
++		const uintptr_t base = (uintptr_t)_dyld_get_image_header(0);
++		CrashLog_WriteLine(fmt::format("iOS fault: pc=+0x{:x} lr=+0x{:x} fp=+0x{:x} sp=+0x{:x}", pc - base, lr - base, fp - base, sp - base));
++	}
++#endif
++
+ 	void* backtraceArray[128];
+ 	size_t size;
+ 
 diff --git a/src/Common/cpu_features.cpp b/src/Common/cpu_features.cpp
 index cbc90a1..1131562 100644
 --- a/src/Common/cpu_features.cpp
