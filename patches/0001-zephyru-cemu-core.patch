@@ -230,10 +230,24 @@ index 26da5ec..e3c6a56 100644
  	{
  		if (!_Mask)
 diff --git a/src/Cafe/HW/Latte/Renderer/Metal/MetalCommon.h b/src/Cafe/HW/Latte/Renderer/Metal/MetalCommon.h
-index 1239f08..dde7806 100644
+index 1239f08..fa769ed 100644
 --- a/src/Cafe/HW/Latte/Renderer/Metal/MetalCommon.h
 +++ b/src/Cafe/HW/Latte/Renderer/Metal/MetalCommon.h
-@@ -107,6 +107,12 @@ inline bool FormatIsRenderable(Latte::E_GX2SURFFMT format)
+@@ -18,7 +18,13 @@ struct MetalPixelFormatSupport
+         m_supportsR8Unorm_sRGB = device->supportsFamily(MTL::GPUFamilyApple1);
+         m_supportsRG8Unorm_sRGB = device->supportsFamily(MTL::GPUFamilyApple1);
+         m_supportsPacked16BitFormats = device->supportsFamily(MTL::GPUFamilyApple1);
++#ifdef CEMU_IOS
++        // isDepth24Stencil8PixelFormatSupported is macOS-only. The metal-cpp safe wrapper
++        // raises on iOS anyway (methodSignatureForSelector), so do not call it there.
++        m_supportsDepth24Unorm_Stencil8 = false;
++#else
+         m_supportsDepth24Unorm_Stencil8 = device->depth24Stencil8PixelFormatSupported();
++#endif
+ 	}
+ };
+ 
+@@ -107,6 +113,12 @@ inline bool FormatIsRenderable(Latte::E_GX2SURFFMT format)
  template <typename... T>
  inline bool executeCommand(fmt::format_string<T...> fmt, T&&... args) {
      std::string command = fmt::format(fmt, std::forward<T>(args)...);
@@ -246,7 +260,7 @@ index 1239f08..dde7806 100644
      int res = system(command.c_str());
      if (res != 0)
      {
-@@ -115,6 +121,7 @@ inline bool executeCommand(fmt::format_string<T...> fmt, T&&... args) {
+@@ -115,6 +127,7 @@ inline bool executeCommand(fmt::format_string<T...> fmt, T&&... args) {
      }
  
      return true;
