@@ -237,11 +237,8 @@ namespace
 		GetConfig().audio_api = IAudioAPI::AudioUnit;
 		GetConfig().mlc_path = mlcPath.generic_string();
 
-		// Without executable memory the AArch64 recompiler cannot run; select the
-		// interpreter so the core never attempts to generate code.
-		const bool jitAvailable = IOSPlatform_IsJITAvailable() != 0;
-		GetConfig().cpu_mode = jitAvailable ? CPUMode::MulticoreRecompiler : CPUMode::SinglecoreInterpreter;
-
+		// The effective CPU mode is decided by ActiveSettings::GetCPUMode(), which
+		// forces the interpreter on iOS when executable memory is unavailable.
 		GetConfigHandle().Save();
 
 		NSLog(@"[ZephyrU] paths: userData='%s' data='%s' games='%s'",
@@ -291,6 +288,7 @@ namespace
 		ActiveSettings::Init();
 
 		cemuLog_log(LogType::Force, "ZephyrU: core initialized (JIT: {})", IOSPlatform_IsJITAvailable() ? "yes" : "no");
+		cemuLog_log(LogType::Force, "ZephyrU: cpu mode {}", ActiveSettings::GetCPUMode());
 		cemuLog_log(LogType::Force, "ZephyrU: data path {}", effectiveDataPath.generic_string());
 		cemuLog_log(LogType::Force, "ZephyrU: mlc path {}", mlcPath.generic_string());
 

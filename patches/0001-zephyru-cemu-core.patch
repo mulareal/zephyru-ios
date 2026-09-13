@@ -462,6 +462,35 @@ index 34df421..f71e902 100644
  
  		AudioAPIEnd,
  	};
+diff --git a/src/config/ActiveSettings.cpp b/src/config/ActiveSettings.cpp
+index 08def5a..ff68a86 100644
+--- a/src/config/ActiveSettings.cpp
++++ b/src/config/ActiveSettings.cpp
+@@ -11,6 +11,10 @@
+ #include "Cafe/Account/Account.h"
+ #include "util/helpers/helpers.h"
+ 
++#ifdef CEMU_IOS
++#include "ios/platform/IOSPlatformCallbacks.h"
++#endif
++
+ void ActiveSettings::SetPaths(bool isPortableMode,
+ 		const fs::path& executablePath,
+ 		const fs::path& userDataPath,
+@@ -66,6 +70,13 @@ bool ActiveSettings::DisplayDRCEnabled()
+ 
+ CPUMode ActiveSettings::GetCPUMode()
+ {
++#ifdef CEMU_IOS
++	// The AArch64 recompiler requires executable memory, which iOS only permits for
++	// JIT-enabled processes. Without it any recompiler mode would abort in xbyak's
++	// allocator, so force the interpreter regardless of game profile settings.
++	if (!IOSPlatform_IsJITAvailable())
++		return CPUMode::SinglecoreInterpreter;
++#endif
+ 	auto mode = g_current_game_profile->GetCPUMode().value_or(CPUMode::Auto);
+ 
+ 	if (mode == CPUMode::Auto)
 diff --git a/src/config/CemuConfig.h b/src/config/CemuConfig.h
 index 48c396f..0566419 100644
 --- a/src/config/CemuConfig.h
