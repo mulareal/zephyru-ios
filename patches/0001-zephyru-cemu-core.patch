@@ -268,6 +268,24 @@ index 1239f08..fa769ed 100644
  }
  
  /*
+diff --git a/src/Cafe/HW/Latte/Renderer/Metal/MetalRenderer.h b/src/Cafe/HW/Latte/Renderer/Metal/MetalRenderer.h
+index c75f12b..a77e5da 100644
+--- a/src/Cafe/HW/Latte/Renderer/Metal/MetalRenderer.h
++++ b/src/Cafe/HW/Latte/Renderer/Metal/MetalRenderer.h
+@@ -269,8 +269,13 @@ public:
+ 
+ 	void SetShouldMaximizeConcurrentCompilation(bool shouldMaximizeConcurrentCompilation)
+ 	{
++#ifdef CEMU_IOS
++	    // setShouldMaximizeConcurrentCompilation is macOS-only and raises on iOS.
++	    (void)shouldMaximizeConcurrentCompilation;
++#else
+ 	    if (m_supportsMetal3)
+ 	        m_device->setShouldMaximizeConcurrentCompilation(shouldMaximizeConcurrentCompilation);
++#endif
+ 	}
+ 
+ 	bool IsCommandBufferActive() const
 diff --git a/src/Cafe/HW/MMU/MMU.h b/src/Cafe/HW/MMU/MMU.h
 index 6e3bee7..673f898 100644
 --- a/src/Cafe/HW/MMU/MMU.h
