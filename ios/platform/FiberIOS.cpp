@@ -9,9 +9,10 @@
 // the vendored copy in ios/third_party/libucontext (see docs/IOS_PORT_RESEARCH.md).
 //
 // Difference from FiberUnix.cpp: libucontext reads makecontext varargs as
-// 64-bit machine words ("unsigned long"), so the pointer is passed as a single
-// argument instead of the two-int split that Apple's macOS makecontext ABI
-// requires.
+// 64-bit machine words ("unsigned long"), so the two 32-bit halves have to be
+// passed as two separate 64-bit values. Cemu's arm64 fiber entry
+// (coreinit::__OSFiberThreadEntry) reconstructs the pointer from a high/low
+// pair, exactly like Apple's makecontext ABI on arm64.
 
 #include "util/Fiber/Fiber.h"
 
@@ -39,7 +40,8 @@ Fiber::Fiber(void(*FiberEntryPoint)(void* userParam), void* userParam, void* pri
 	ctx->uc_stack.ss_size = stackSize;
 	ctx->uc_link = ctx;
 
-	libucontext_makecontext(ctx, (void(*)())FiberEntryPoint, 1, (unsigned long)userParam);
+	const uintptr_t param = (uintptr_t)userParam;
+	libucontext_makecontext(ctx, (void(*)())FiberEntryPoint, 2, (unsigned long)(param >> 32), (unsigned long)param);
 	this->m_implData = (void*)ctx;
 }
 
