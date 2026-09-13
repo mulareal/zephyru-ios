@@ -15,6 +15,8 @@
 #include "Cafe/GraphicPack/GraphicPack2.h"
 #include "Cafe/HW/Espresso/PPCState.h"
 #include "Cafe/HW/Latte/Core/LattePerformanceMonitor.h"
+#include "Cafe/HW/Latte/Renderer/Metal/MetalRenderer.h"
+#include "Cafe/HW/Latte/Renderer/Renderer.h"
 #include "Cafe/TitleList/SaveList.h"
 #include "Cafe/TitleList/TitleList.h"
 #include "Cemu/Logging/CemuLogging.h"
@@ -393,6 +395,27 @@ namespace
 {
 	if (!s_coreInitialized)
 		return;
+
+	// The desktop frontend creates the renderer in its wx canvas; on iOS nothing did,
+	// which left g_renderer null when the GPU thread started. Create it and its layer
+	// on the main thread (UIKit) before the title is launched.
+	if (!g_renderer)
+	{
+		void (^initRenderer)(void) = ^{
+			if (g_renderer)
+				return;
+			g_renderer = std::make_unique<MetalRenderer>();
+			sint32 width = 0, height = 0;
+			WindowSystem::GetWindowPhysSize(width, height);
+			static_cast<MetalRenderer*>(g_renderer.get())->InitializeLayer({width, height}, true);
+			cemuLog_log(LogType::Force, "ZephyrU: Metal renderer layer initialized ({}x{})", width, height);
+		};
+		if ([NSThread isMainThread])
+			initRenderer();
+		else
+			dispatch_sync(dispatch_get_main_queue(), initRenderer);
+	}
+
 	WindowSystem::IOSPlatform_SetAppActive(true);
 	CafeSystem::LaunchForegroundTitle();
 }
